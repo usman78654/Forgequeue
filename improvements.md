@@ -97,3 +97,16 @@ Autonomy legend:
 8. Run Compose, chaos, load, and recovery verification when Docker is available.
 9. Replace repository placeholders and publish signed images after GitHub ownership is supplied.
 10. Capture measured results, screenshots, and the final demonstration.
+
+## Deferred user actions
+
+These actions are intentionally postponed and are not blockers for local development:
+
+| Action | Status | Instructions |
+|---|---|---|
+| Rotate the exposed Slack webhook | DEFERRED — SECURITY REQUIRED | Revoke the webhook previously shared in chat, generate a replacement, and update the `SLACK_WEBHOOK_URL` GitHub Actions secret. Never send or commit the replacement URL. |
+| Correct the initial commit author email | DEFERRED | Get the GitHub no-reply address from **GitHub Settings → Emails**, set it with `git config user.email`, then run `git commit --amend --reset-author --no-edit` before pushing. |
+| Push the local `main` branch | DEFERRED | Authenticate with GitHub, then run `git push -u origin main`. The configured remote is `https://github.com/usman78654/Forgequeue.git`. |
+| Verify the Slack secret | DEFERRED | After pushing, run **Actions → Test Slack alert → Run workflow** and confirm that one message reaches `#forgequeue-alerts`. |
+| Publish the first release | DEFERRED | After CI passes, create and push `v1.0.0`; the release workflow will publish GHCR images and create the GitHub Release. |
+| Add the MIT license | DEFERRED | Add GitHub's standard MIT `LICENSE` template using the preferred copyright name. |
