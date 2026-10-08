@@ -1,0 +1,10 @@
+services:
+  alertmanager:
+    volumes:
+      - ./deploy/alertmanager/alertmanager.slack.yml:/etc/alertmanager/alertmanager.yml:ro
+    secrets:
+      - slack_webhook_url
+
+secrets:
+  slack_webhook_url:
+    file: ${SLACK_WEBHOOK_FILE:-.secrets/slack_webhook_url}

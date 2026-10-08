@@ -1,0 +1,10 @@
+.git
+.github
+.env
+bin
+coverage.out
+*.log
+deploy
+docs
+frontend/node_modules
+frontend/dist

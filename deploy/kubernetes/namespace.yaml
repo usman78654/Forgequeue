@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: forgequeue}
+---
+apiVersion: v1
+kind: Secret
+metadata: {name: forgequeue-secrets, namespace: forgequeue}
+type: Opaque
+stringData:
+  DATABASE_URL: postgres://queue:CHANGE_ME@postgres:5432/queue?sslmode=disable
+  RABBITMQ_URL: amqp://queue:CHANGE_ME@rabbitmq:5672/
+  S3_ACCESS_KEY: CHANGE_ME
+  S3_SECRET_KEY: CHANGE_ME
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: forgequeue-config, namespace: forgequeue}
+data:
+  QUEUE_NAME: jobs.default
+  WORKER_CONCURRENCY: "8"
+  LEASE_DURATION: 30s
+  WORKER_DRAIN_TIMEOUT: 45s
+  WORKER_CAPABILITIES: echo,sleep
+  ALLOW_COMMAND_HANDLER: "false"
+  S3_ENDPOINT: minio.storage.svc.cluster.local:9000
+  S3_PUBLIC_ENDPOINT: artifacts.example.com
+  S3_BUCKET: forgequeue

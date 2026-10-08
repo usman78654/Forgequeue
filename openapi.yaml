@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: ForgeQueue API
+  version: 0.6.0
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get: {responses: {'200': {description: Healthy}}}
+  /readyz:
+    get: {responses: {'200': {description: Ready}, '503': {description: Not ready}}}
+  /v1/jobs:
+    get:
+      summary: List jobs with cursor pagination and filters
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: queue, in: query, schema: {type: string}}
+        - {name: type, in: query, schema: {type: string}}
+        - {name: created_after, in: query, schema: {type: string, format: date-time}}
+        - {name: created_before, in: query, schema: {type: string, format: date-time}}
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 100}}
+      responses: {'200': {description: Job page}, '400': {description: Invalid cursor or timestamp}}
+    post:
+      summary: Submit a job
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/JobSubmission'}}}}
+      responses: {'201': {description: Created}, '200': {description: Existing idempotent submission}, '400': {description: Invalid request}}
+  /v1/jobs/{id}:
+    get:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'200': {description: Job}, '404': {description: Not found}}
+  /v1/jobs/{id}/cancel:
+    post:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
+      responses: {'204': {description: Cancelled}, '409': {description: Cannot cancel}}
+  /v1/jobs/{id}/attempts:
+    get:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'200': {description: Execution attempts}}
+  /v1/jobs/{id}/events:
+    get:
+      summary: List durable job events in ascending order
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: after, in: query, description: Return events with an ID greater than this value, schema: {type: integer, format: int64, minimum: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 100}}
+      responses:
+        '200': {description: Job event page, content: {application/json: {schema: {$ref: '#/components/schemas/EventPage'}}}}
+        '400': {description: Invalid pagination parameter}
+        '404': {description: Job not found}
+  /v1/jobs/{id}/events/stream:
+    get:
+      summary: Follow job events over a server-sent events stream
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: after, in: query, schema: {type: integer, format: int64, minimum: 0}}
+        - {name: Last-Event-ID, in: header, schema: {type: integer, format: int64, minimum: 0}}
+      responses:
+        '200': {description: Server-sent job events, content: {text/event-stream: {schema: {type: string}}}}
+        '400': {description: Invalid event ID}
+        '404': {description: Job not found}
+  /v1/jobs/{id}/requeue:
+    post:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'204': {description: Dead job requeued}, '409': {description: Job is not dead}}
+  /v1/jobs/{id}/artifacts:
+    get:
+      summary: List unexpired artifact metadata
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'200': {description: Artifact list}}
+    post:
+      summary: Upload an artifact (maximum 50 MiB by default)
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: name, in: query, required: true, schema: {type: string, maxLength: 255}}
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {'201': {description: Artifact stored, content: {application/json: {schema: {$ref: '#/components/schemas/Artifact'}}}}, '413': {description: Artifact too large}}
+  /v1/jobs/{id}/artifacts/{artifactID}/download:
+    get:
+      summary: Create a short-lived signed download URL
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: artifactID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses: {'200': {description: Signed URL valid for 15 minutes}, '404': {description: Missing or expired}}
+  /v1/workflows:
+    get:
+      summary: List workflow summaries with cursor pagination
+      parameters:
+        - {name: status, in: query, schema: {type: string}}
+        - {name: name, in: query, schema: {type: string}}
+        - {name: created_after, in: query, schema: {type: string, format: date-time}}
+        - {name: created_before, in: query, schema: {type: string, format: date-time}}
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 100}}
+      responses: {'200': {description: Workflow page}}
+    post:
+      summary: Submit a DAG workflow
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WorkflowSubmission'}}}}
+      responses: {'201': {description: Created}, '400': {description: Invalid DAG}}
+  /v1/workflows/{id}:
+    get:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'200': {description: Workflow}, '404': {description: Not found}}
+  /v1/workflows/{id}/cancel:
+    post:
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
+      responses: {'204': {description: Cancelled}}
+  /v1/schedules:
+    get: {responses: {'200': {description: Schedules}}}
+    post:
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
+      responses: {'201': {description: Created}}
+  /v1/workers:
+    get:
+      summary: List registered workers and heartbeat health
+      responses: {'200': {description: Worker list}, '401': {description: API key required}}
+  /v1/queues:
+    get:
+      summary: List queue controls and running counts
+      responses: {'200': {description: Queue list}}
+  /v1/queues/{queue}:
+    put:
+      summary: Pause/resume a queue and configure its concurrency cap
+      parameters: [{name: queue, in: path, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/QueueControl'}}}}
+      responses: {'204': {description: Queue control updated}}
+  /v1/admin/principals:
+    post:
+      summary: Create an RBAC principal (admin only)
+      responses: {'201': {description: Principal created}, '403': {description: Admin role required}}
+  /v1/admin/principals/{id}/keys:
+    post:
+      summary: Create a one-time API key token (admin only)
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'201': {description: Key created; plaintext token is returned only once}}
+  /v1/admin/keys/{id}:
+    delete:
+      summary: Revoke an API key (admin only)
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'204': {description: Key revoked}}
+  /v1/admin/audit:
+    get:
+      summary: Read the latest mutation audit records (admin only)
+      responses: {'200': {description: Audit records}}
+  /v1/admin/quotas/{id}:
+    put:
+      summary: Set tenant quotas (admin only)
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuota'}}}}
+      responses: {'204': {description: Quotas updated}, '403': {description: Admin role required}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: API key}
+  parameters:
+    ID: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    Cancellation:
+      type: object
+      properties: {reason: {type: string}}
+    QueueControl:
+      type: object
+      properties: {paused: {type: boolean}, max_concurrency: {type: [integer, 'null'], minimum: 1}}
+    TenantQuota:
+      type: object
+      required: [submissions_per_minute, max_concurrent_jobs, max_payload_bytes, max_schedules]
+      properties:
+        submissions_per_minute: {type: integer, minimum: 1}
+        max_concurrent_jobs: {type: integer, minimum: 1}
+        max_payload_bytes: {type: integer, minimum: 1}
+        max_schedules: {type: integer, minimum: 1}
+    JobEvent:
+      type: object
+      required: [id, job_id, type, level, created_at]
+      properties:
+        id: {type: integer, format: int64}
+        job_id: {type: string, format: uuid}
+        attempt: {type: integer}
+        type: {type: string, enum: [state, progress, log]}
+        level: {type: string, enum: [debug, info, warn, error]}
+        message: {type: string}
+        progress: {type: number, minimum: 0, maximum: 1}
+        data: {}
+        created_at: {type: string, format: date-time}
+    EventPage:
+      type: object
+      required: [items, next_after, has_more]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/JobEvent'}}
+        next_after: {type: integer, format: int64}
+        has_more: {type: boolean}
+    Artifact:
+      type: object
+      required: [id, job_id, name, content_type, size_bytes, sha256, created_at, expires_at]
+      properties:
+        id: {type: string, format: uuid}
+        job_id: {type: string, format: uuid}
+        name: {type: string}
+        content_type: {type: string}
+        size_bytes: {type: integer, format: int64}
+        sha256: {type: string}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+    JobSubmission:
+      type: object
+      required: [type, payload]
+      properties:
+        type: {type: string}
+        queue: {type: string, default: jobs.default}
+        payload: {}
+        priority: {type: integer, minimum: 0, maximum: 9}
+        max_attempts: {type: integer, minimum: 1}
+        timeout_seconds: {type: integer, minimum: 1}
+        scheduled_at: {type: string, format: date-time}
+        idempotency_key: {type: string}
+        retry_policy: {type: string, enum: [fixed, linear, exponential], default: exponential}
+        retry_initial_seconds: {type: integer, minimum: 1, default: 2}
+        retry_max_seconds: {type: integer, minimum: 1, default: 300}
+        retry_jitter: {type: boolean, default: true}
+        non_retryable_errors: {type: array, items: {type: string}}
+        required_capabilities: {type: array, items: {type: string}}
+    WorkflowSubmission:
+      type: object
+      required: [name, steps]
+      properties:
+        name: {type: string}
+        fail_fast: {type: boolean, default: true}
+        steps: {type: array, items: {$ref: '#/components/schemas/WorkflowStep'}}
+    WorkflowStep:
+      allOf:
+        - {$ref: '#/components/schemas/JobSubmission'}
+        - {type: object, required: [key], properties: {key: {type: string}, depends_on: {type: array, items: {type: string}}, condition: {type: string, enum: ['success()', 'failure()', 'always()']}, continue_on_error: {type: boolean, default: false}, fan_out_from: {type: string}, compensation: {$ref: '#/components/schemas/Compensation'}}}
+    Compensation:
+      type: object
+      required: [type, payload]
+      properties: {type: {type: string}, queue: {type: string}, payload: {}}
+    Schedule:
+      type: object
+      required: [name, type, payload, interval_seconds]
+      properties:
+        name: {type: string}
+        type: {type: string}
+        payload: {}
+        interval_seconds: {type: integer, minimum: 1}
+        start_at: {type: string, format: date-time}

@@ -1,0 +1,8 @@
+{
+  "annotations":{"list":[]},"editable":true,"panels":[
+    {"type":"timeseries","title":"Submitted jobs / second","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum(rate(forgequeue_jobs_submitted_total[5m])) by (type)","legendFormat":"{{type}}"}]},
+    {"type":"timeseries","title":"Processed jobs / second","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(forgequeue_jobs_processed_total[5m])) by (status, type)","legendFormat":"{{status}} {{type}}"}]},
+    {"type":"stat","title":"API targets up","gridPos":{"h":6,"w":6,"x":0,"y":8},"targets":[{"expr":"sum(up{job=\"forgequeue-api\"})"}]},
+    {"type":"stat","title":"Worker targets up","gridPos":{"h":6,"w":6,"x":6,"y":8},"targets":[{"expr":"sum(up{job=\"forgequeue-worker\"})"}]}
+  ],"refresh":"10s","schemaVersion":39,"tags":["forgequeue"],"templating":{"list":[]},"time":{"from":"now-1h","to":"now"},"title":"ForgeQueue Overview","uid":"forgequeue-overview","version":1
+}

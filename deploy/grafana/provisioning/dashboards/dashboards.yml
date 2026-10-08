@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: ForgeQueue
+    folder: ForgeQueue
+    type: file
+    options: {path: /var/lib/grafana/dashboards}

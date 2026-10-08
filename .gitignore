@@ -1,0 +1,10 @@
+.env
+.idea/
+.vscode/
+bin/
+coverage.out
+*.log
+.secrets/
+*.secret
+node_modules/
+frontend/dist/

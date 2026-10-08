@@ -1,0 +1,10 @@
+{
+  "name": "build-and-release",
+  "fail_fast": true,
+  "steps": [
+    {"key":"compile","type":"echo","payload":{"stage":"compiled"}},
+    {"key":"unit-tests","type":"sleep","payload":{"duration":"2s"},"depends_on":["compile"]},
+    {"key":"lint","type":"echo","payload":{"stage":"linted"},"depends_on":["compile"]},
+    {"key":"release","type":"echo","payload":{"stage":"released"},"depends_on":["unit-tests","lint"]}
+  ]
+}

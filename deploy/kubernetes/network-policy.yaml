@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: forgequeue}
+spec: {podSelector: {}, policyTypes: [Ingress, Egress]}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: app-traffic, namespace: forgequeue}
+spec:
+  podSelector: {matchExpressions: [{key: app, operator: In, values: [forgequeue-api, forgequeue-worker, forgequeue-scheduler]}]}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{namespaceSelector: {}}, {podSelector: {}}]
+      ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 9091}, {protocol: TCP, port: 9092}]
+  egress:
+    - to: [{podSelector: {}}]
+    - to: [{namespaceSelector: {}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-monitoring, namespace: forgequeue}
+spec:
+  podSelector: {matchExpressions: [{key: app, operator: In, values: [forgequeue-api, forgequeue-worker, forgequeue-scheduler]}]}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}]
+      ports: [{protocol: TCP, port: 8080}, {protocol: TCP, port: 9091}, {protocol: TCP, port: 9092}]

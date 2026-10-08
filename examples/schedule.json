@@ -1,0 +1,7 @@
+{
+  "name": "heartbeat-every-minute",
+  "type": "echo",
+  "payload": {"message":"scheduled heartbeat"},
+  "interval_seconds": 60,
+  "priority": 2
+}

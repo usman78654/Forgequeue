@@ -1,0 +1,25 @@
+name: Test Slack alert
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$SLACK_WEBHOOK_URL" || { echo "SLACK_WEBHOOK_URL is not configured"; exit 1; }
+          payload=$(jq -n --arg repo "$REPOSITORY" --arg run "$RUN_URL" \
+            '{text: ("✅ ForgeQueue Slack integration is working for " + $repo + "\n" + $run)}')
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"

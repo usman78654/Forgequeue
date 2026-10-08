@@ -1,0 +1,38 @@
+groups:
+  - name: forgequeue
+    rules:
+      - alert: ForgeQueueBacklogGrowing
+        expr: sum(forgequeue_queue_depth) > 100 and deriv(sum(forgequeue_queue_depth)[10m:]) > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "ForgeQueue backlog is growing"}
+      - alert: ForgeQueueHighFailureRate
+        expr: sum(rate(forgequeue_jobs_processed_total{status="failed"}[5m])) / clamp_min(sum(rate(forgequeue_jobs_processed_total[5m])), 0.001) > 0.10
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "More than 10% of jobs are failing"}
+      - alert: ForgeQueueDeadLetters
+        expr: forgequeue_jobs{status="dead"} > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Jobs are waiting in the dead-letter queue"}
+      - alert: ForgeQueueNoWorkers
+        expr: sum(forgequeue_queue_depth) > 0 and forgequeue_active_workers < 1
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "Queued work exists but no worker is healthy"}
+      - alert: ForgeQueueExpiredLeases
+        expr: forgequeue_expired_leases > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "One or more execution leases expired"}
+      - alert: ForgeQueueSchedulerLeaderMissing
+        expr: absent(forgequeue_scheduler_leader) or max(forgequeue_scheduler_leader) < 1
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "No scheduler replica holds leadership"}
+      - alert: ForgeQueueOutboxStalled
+        expr: forgequeue_outbox_pending > 0 and forgequeue_outbox_oldest_seconds > 120
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "The transactional outbox is not draining"}
