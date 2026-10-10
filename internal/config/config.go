@@ -16,6 +16,8 @@ type Config struct {
 	S3Endpoint, S3AccessKey, S3SecretKey, S3Bucket, S3PublicEndpoint           string
 	ArtifactMaxBytes                                                           int64
 	ArtifactRetention                                                          time.Duration
+	SessionDuration                                                            time.Duration
+	SessionCookieSecure                                                        bool
 }
 
 func Load() Config {
@@ -28,15 +30,23 @@ func Load() Config {
 		WorkerID: env("WORKER_ID", host), WorkerConcurrency: envInt("WORKER_CONCURRENCY", 4),
 		LeaseDuration: envDuration("LEASE_DURATION", 30*time.Second), OutboxPollInterval: envDuration("OUTBOX_POLL_INTERVAL", 500*time.Millisecond),
 		SchedulerPollInterval: envDuration("SCHEDULER_POLL_INTERVAL", time.Second),
-		DrainTimeout: envDuration("WORKER_DRAIN_TIMEOUT", 45*time.Second), AllowCommandHandler: envBool("ALLOW_COMMAND_HANDLER", false),
+		DrainTimeout:          envDuration("WORKER_DRAIN_TIMEOUT", 45*time.Second), AllowCommandHandler: envBool("ALLOW_COMMAND_HANDLER", false),
 		S3Endpoint: env("S3_ENDPOINT", "localhost:9000"), S3PublicEndpoint: env("S3_PUBLIC_ENDPOINT", "localhost:9000"),
 		S3AccessKey: env("S3_ACCESS_KEY", "minioadmin"), S3SecretKey: env("S3_SECRET_KEY", "minioadmin"), S3Bucket: env("S3_BUCKET", "forgequeue"),
 		ArtifactMaxBytes: int64(envInt("ARTIFACT_MAX_BYTES", 50<<20)), ArtifactRetention: envDuration("ARTIFACT_RETENTION", 7*24*time.Hour),
+		SessionDuration: envDuration("WEB_SESSION_DURATION", 8*time.Hour), SessionCookieSecure: envBool("WEB_SESSION_SECURE_COOKIE", true),
 	}
 }
 func envBool(k string, d bool) bool {
-	v := os.Getenv(k); if v == "" { return d }
-	b, e := strconv.ParseBool(v); if e != nil { return d }; return b
+	v := os.Getenv(k)
+	if v == "" {
+		return d
+	}
+	b, e := strconv.ParseBool(v)
+	if e != nil {
+		return d
+	}
+	return b
 }
 func splitEnv(k, d string) []string {
 	v := env(k, d)

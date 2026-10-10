@@ -23,7 +23,7 @@ Autonomy legend:
 | 1 | Full Docker Compose verification | NEEDS ENVIRONMENT | MOSTLY | Fresh migration, API, workers, scheduler, RabbitMQ, MinIO, Prometheus, Grafana, and tracing start successfully; job, workflow, artifact, retry, cancellation, and recovery smoke tests pass |
 | 2 | Graceful-drain integration tests | PLANNED | YES | Tests prove active jobs finish during draining, timed-out drains release work once, readiness becomes unavailable, and restarted workers return to `running` |
 | 3 | Artifact integration tests | PLANNED | YES | Real MinIO tests cover upload, listing, signed download, ownership, size rejection, expiry, cleanup, and missing objects |
-| 4 | Prometheus and manifest validation | PLANNED | YES | CI runs `promtool`, Compose validation, OpenAPI validation, Kubernetes schema validation, and KEDA resource checks |
+| 4 | Prometheus and manifest validation | COMPLETE | YES | CI runs `promtool`, Compose validation, OpenAPI validation, Kubernetes schema validation, and KEDA resource checks |
 | 5 | Real load-test baseline | NEEDS ENVIRONMENT | MOSTLY | Reproducible test is run against the complete stack and records throughput, p50/p95/p99 latency, queue depth, resources, configuration, hardware, and commit |
 | 6 | Automated chaos verification | NEEDS ENVIRONMENT | MOSTLY | Worker, RabbitMQ, and PostgreSQL interruption scenarios run automatically and prove eventual recovery without lost terminal state |
 
@@ -34,9 +34,9 @@ Autonomy legend:
 | 7 | Initialize and clean Git repository | COMPLETE | YES | Repository is initialized on `main`, generated dependencies and secrets are ignored, the GitHub remote is configured, and the initial commit is ready to push |
 | 8 | Replace placeholder module and image names | COMPLETE | PARTIAL | Go imports use `github.com/usman78654/Forgequeue` and deployment images use `ghcr.io/usman78654/` |
 | 9 | License, contribution guide, and changelog | PLANNED | YES | Repository contains an approved license, `CONTRIBUTING.md`, release process, semantic-versioning guidance, and `CHANGELOG.md` |
-| 10 | Remove production development credentials | PLANNED | YES | Development API keys are created only in an explicit local-development mode and cannot appear in production migrations |
+| 10 | Remove production development credentials | COMPLETE | YES | Development API keys are created only in an explicit local-development mode and cannot appear in production migrations |
 | 11 | Complete CI build matrix | COMPLETE | YES | CI builds API, worker, scheduler, migrator, CLI, load tester, frontend, and all container targets |
-| 12 | CI quality gates | PLANNED | YES | CI enforces formatting, vetting, race tests, coverage threshold, vulnerability checks, frontend audit, OpenAPI/YAML/Prometheus validation, and artifact integration tests |
+| 12 | CI quality gates | IN PROGRESS | YES | CI enforces formatting, vetting, race tests, coverage threshold, vulnerability checks, frontend audit, OpenAPI/YAML/Prometheus validation, and artifact integration tests |
 | 13 | Container publishing and releases | NEEDS ENVIRONMENT | PARTIAL | Tag-driven workflow publishes multi-architecture GHCR images with provenance and a generated GitHub Release; first tag still needs live verification |
 
 ## Priority 3 — Production deployment
@@ -70,7 +70,7 @@ Autonomy legend:
 |---|---|---|---|---|
 | 29 | Signed webhooks | PLANNED | YES | Job/workflow lifecycle webhooks support signing, idempotency, retries, delivery history, endpoint disablement, and dead-letter handling |
 | 30 | Cron and time-zone scheduling | PLANNED | YES | Schedules support cron expressions, IANA time zones, misfire policy, catch-up/skip behavior, overlap limits, and execution history |
-| 31 | Go handler SDK | PLANNED | YES | Typed handler registry provides payload validation, progress, structured logs, artifacts, cancellation, heartbeats, and permanent/retryable errors |
+| 31 | Go handler SDK | IN PROGRESS | YES | Typed handler registry provides payload validation, progress, structured logs, artifacts, cancellation, heartbeats, and permanent/retryable errors |
 | 32 | Client SDK | PLANNED | YES | A versioned Go client covers jobs, workflows, schedules, events, artifacts, queues, pagination, retries, and typed API errors |
 | 33 | Web console feature parity | PLANNED | YES | Console supports artifacts, live SSE logs, dead-letter operations, queue controls, worker draining state, retry timelines, metrics links, audit history, and secure key setup |
 | 34 | Administrative maintenance CLI | PLANNED | YES | CLI supports diagnostics, queue control, worker inspection, DLQ requeue, artifact cleanup, state reconciliation, and configuration checks |

@@ -30,6 +30,7 @@ This file is updated as features are implemented and verified. A feature is only
 | 22 | Security hardening | COMPLETE | TLS guidance, safe handler registry, secret management, network policy, and scans |
 | 23 | Load and chaos testing | COMPLETE | Reproducible throughput report plus broker/worker/database failure scenarios |
 | 24 | Portfolio demo and ADRs | COMPLETE | One-command demo and architecture decision records explain major tradeoffs |
+| 25 | Typed Go handler SDK | COMPLETE | Public concurrent-safe registry, typed JSON handlers, progress/log reporting, cancellation, panic isolation, permanent errors, examples, and worker integration pass tests |
 
 ## Already implemented
 
@@ -45,6 +46,8 @@ This file is updated as features are implemented and verified. A feature is only
 - Docker Compose, Kubernetes manifests, HPA, PDB, and CI
 
 ## Verification log
+
+- `2026-10-08` — Started the public Go handler SDK with typed payload/result support, durable reporting adapters, panic isolation, permanent-error retry classification, and built-in worker handler migration.
 
 - `2026-09-29` — Migration runner passed upgrade-baseline and clean-database checks with three ordered checksummed migrations.
 - `2026-09-29` — RabbitMQ stop/restart test returned readiness `503`, retained the job in PostgreSQL, recovered delivery, and completed it without restarting API or worker.

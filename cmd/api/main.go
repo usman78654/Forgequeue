@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"github.com/usman78654/Forgequeue/internal/broker"
 	"github.com/usman78654/Forgequeue/internal/artifacts"
+	"github.com/usman78654/Forgequeue/internal/broker"
 	"github.com/usman78654/Forgequeue/internal/config"
 	"github.com/usman78654/Forgequeue/internal/database"
 	"github.com/usman78654/Forgequeue/internal/httpapi"
@@ -42,9 +42,14 @@ func main() {
 	defer rabbit.Close()
 	go broker.RunOutbox(ctx, db, rabbit, cfg.OutboxPollInterval)
 	go observability.RunCollector(ctx, db)
-	artifactStore := &artifacts.Store{DB:db,Endpoint:cfg.S3Endpoint,PublicEndpoint:cfg.S3PublicEndpoint,AccessKey:cfg.S3AccessKey,SecretKey:cfg.S3SecretKey,Bucket:cfg.S3Bucket,MaxBytes:cfg.ArtifactMaxBytes,Retention:cfg.ArtifactRetention}
-	if e=artifactStore.EnsureBucket(ctx); e!=nil { slog.Warn("artifact storage unavailable", "error",e); artifactStore=nil } else { go artifactStore.RunCleanup(ctx) }
-	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: httpapi.NewWithArtifacts(db, rabbit, artifactStore).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	artifactStore := &artifacts.Store{DB: db, Endpoint: cfg.S3Endpoint, PublicEndpoint: cfg.S3PublicEndpoint, AccessKey: cfg.S3AccessKey, SecretKey: cfg.S3SecretKey, Bucket: cfg.S3Bucket, MaxBytes: cfg.ArtifactMaxBytes, Retention: cfg.ArtifactRetention}
+	if e = artifactStore.EnsureBucket(ctx); e != nil {
+		slog.Warn("artifact storage unavailable", "error", e)
+		artifactStore = nil
+	} else {
+		go artifactStore.RunCleanup(ctx)
+	}
+	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: httpapi.NewWithArtifacts(db, rabbit, artifactStore).ConfigureWebSessions(cfg.SessionDuration, cfg.SessionCookieSecure).Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)

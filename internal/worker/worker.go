@@ -6,16 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	amqp "github.com/rabbitmq/amqp091-go"
+	handlersdk "github.com/usman78654/Forgequeue/handler"
 	"github.com/usman78654/Forgequeue/internal/broker"
 	"github.com/usman78654/Forgequeue/internal/jobs"
 	"github.com/usman78654/Forgequeue/internal/tracing"
-	"github.com/prometheus/client_golang/prometheus"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -36,16 +36,21 @@ type Worker struct {
 	DrainTimeout         time.Duration
 	AllowCommand         bool
 	Draining             *atomic.Bool
+	Handlers             *handlersdk.Registry
 }
 
 func (w Worker) Run(ctx context.Context) error {
+	if w.Handlers == nil {
+		w.Handlers = defaultHandlers(w.AllowCommand)
+	}
 	queues := w.Queues
 	if len(queues) == 0 {
 		queues = []string{w.Queue}
 	}
 	consumeCtx, stopConsuming := context.WithCancel(context.Background())
 	executionCtx, stopExecutions := context.WithCancel(context.Background())
-	defer stopConsuming(); defer stopExecutions()
+	defer stopConsuming()
+	defer stopExecutions()
 	deliveries := make(chan amqp.Delivery)
 	var forwarders sync.WaitGroup
 	for i, queue := range queues {
@@ -72,7 +77,9 @@ func (w Worker) Run(ctx context.Context) error {
 		go func() { defer loops.Done(); w.loop(executionCtx, deliveries) }()
 	}
 	<-ctx.Done()
-	if w.Draining != nil { w.Draining.Store(true) }
+	if w.Draining != nil {
+		w.Draining.Store(true)
+	}
 	stopHeartbeat()
 	drainCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	_ = w.Store.SetWorkerState(drainCtx, w.ID, "draining")
@@ -80,17 +87,25 @@ func (w Worker) Run(ctx context.Context) error {
 	stopConsuming()
 	done := make(chan struct{})
 	go func() { loops.Wait(); close(done) }()
-	timeout := w.DrainTimeout; if timeout <= 0 { timeout = 45*time.Second }
+	timeout := w.DrainTimeout
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
 	select {
 	case <-done:
 	case <-time.After(timeout):
 		stopExecutions()
 		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if n, err := w.Store.ReleaseWorkerJobs(releaseCtx, w.ID); err != nil { slog.Error("release jobs during drain", "error", err) } else { slog.Warn("drain timeout; jobs released", "count", n) }
+		if n, err := w.Store.ReleaseWorkerJobs(releaseCtx, w.ID); err != nil {
+			slog.Error("release jobs during drain", "error", err)
+		} else {
+			slog.Warn("drain timeout; jobs released", "count", n)
+		}
 		releaseCancel()
 	}
 	offlineCtx, offlineCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	_ = w.Store.SetWorkerState(offlineCtx, w.ID, "offline"); offlineCancel()
+	_ = w.Store.SetWorkerState(offlineCtx, w.ID, "offline")
+	offlineCancel()
 	return ctx.Err()
 }
 func (w Worker) heartbeat(ctx context.Context) {
@@ -117,7 +132,8 @@ func (w Worker) loop(ctx context.Context, in <-chan amqp.Delivery) {
 				return
 			}
 			w.handle(ctx, d)
-		case <-ctx.Done(): return
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -155,7 +171,8 @@ func (w Worker) handle(ctx context.Context, d amqp.Delivery) {
 	started := time.Now()
 	maintenanceDone := make(chan bool, 1)
 	go w.maintain(runCtx, j, cancel, maintenanceDone)
-	result, e := execute(runCtx, j, report, w.AllowCommand)
+	reporter := eventReporter{report: report}
+	result, e := w.Handlers.Execute(runCtx, handlersdk.Job{ID: j.ID, Type: j.Type, Queue: j.Queue, Attempt: j.Attempt, Payload: j.Payload}, reporter)
 	cancel()
 	cancelled := <-maintenanceDone
 	if cancelled {
@@ -186,6 +203,22 @@ func (w Worker) handle(ctx context.Context, d amqp.Delivery) {
 		slog.Error("job processing", "job_id", j.ID, "error", e)
 	}
 	_ = d.Ack(false)
+}
+
+type eventReporter struct{ report func(jobs.EventInput) }
+
+func (r eventReporter) Progress(value float64, message string) {
+	if value < 0 {
+		value = 0
+	}
+	if value > 1 {
+		value = 1
+	}
+	r.report(jobs.EventInput{Type: "progress", Message: message, Progress: &value})
+}
+
+func (r eventReporter) Log(level, message string, data json.RawMessage) {
+	r.report(jobs.EventInput{Type: "log", Level: level, Message: message, Data: data})
 }
 func (w Worker) maintain(ctx context.Context, job jobs.Job, cancel context.CancelFunc, done chan<- bool) {
 	cancelled := false
@@ -222,81 +255,4 @@ func (w Worker) maintain(ctx context.Context, job jobs.Job, cancel context.Cance
 		}
 	}
 }
-func execute(ctx context.Context, j jobs.Job, report func(jobs.EventInput), allowCommand bool) ([]byte, error) {
-	switch j.Type {
-	case "echo":
-		report(jobs.EventInput{Type: "log", Message: "echo payload processed"})
-		return j.Payload, nil
-	case "sleep":
-		var p struct {
-			Duration string `json:"duration"`
-		}
-		if e := json.Unmarshal(j.Payload, &p); e != nil {
-			return nil, e
-		}
-		d, e := time.ParseDuration(p.Duration)
-		if e != nil {
-			return nil, e
-		}
-		if d <= 0 {
-			return []byte(`{"slept":true}`), nil
-		}
-		interval := d / 10
-		if interval < 250*time.Millisecond {
-			interval = 250 * time.Millisecond
-		}
-		if interval > 2*time.Second {
-			interval = 2 * time.Second
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		timer := time.NewTimer(d)
-		defer timer.Stop()
-		started := time.Now()
-		for {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-ticker.C:
-				value := time.Since(started).Seconds() / d.Seconds()
-				if value > .99 {
-					value = .99
-				}
-				report(jobs.EventInput{Type: "progress", Message: "sleep progress", Progress: &value})
-			case <-timer.C:
-				return []byte(`{"slept":true}`), nil
-			}
-		}
-	case "command":
-		if !allowCommand { return nil, errors.New("command handler is disabled; use a registered safe handler or explicitly set ALLOW_COMMAND_HANDLER=true") }
-		var p struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}
-		if e := json.Unmarshal(j.Payload, &p); e != nil {
-			return nil, e
-		}
-		if p.Command == "" {
-			return nil, errors.New("command is required")
-		}
-		out, e := exec.CommandContext(ctx, p.Command, p.Args...).CombinedOutput()
-		if e != nil {
-			report(jobs.EventInput{Type: "log", Level: "error", Message: "command failed", Data: logData(out)})
-			return nil, fmt.Errorf("%w: %s", e, out)
-		}
-		report(jobs.EventInput{Type: "log", Message: "command completed", Data: logData(out)})
-		b, _ := json.Marshal(map[string]string{"output": string(out)})
-		return b, nil
-	default:
-		return nil, fmt.Errorf("unknown job type %q", j.Type)
-	}
-}
 func progress(value float64) *float64 { return &value }
-func logData(output []byte) json.RawMessage {
-	const max = 16 * 1024
-	if len(output) > max {
-		output = output[:max]
-	}
-	body, _ := json.Marshal(map[string]string{"output": string(output)})
-	return body
-}

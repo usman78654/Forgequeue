@@ -8,3 +8,6 @@ coverage.out
 *.secret
 node_modules/
 frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/

@@ -30,3 +30,17 @@ func TestRetryPoliciesAndNonRetryableErrors(t *testing.T) {
 		t.Fatal("expected error to be non-retryable")
 	}
 }
+
+type permanentTestError struct{ error }
+
+func (permanentTestError) Permanent() bool { return true }
+
+func TestPermanentErrorIsNonRetryable(t *testing.T) {
+	cause := errors.New("invalid typed payload")
+	if !nonRetryable(Job{}, permanentTestError{cause}) {
+		t.Fatal("expected permanent handler error to be non-retryable")
+	}
+	if nonRetryable(Job{}, cause) {
+		t.Fatal("ordinary error should remain retryable")
+	}
+}

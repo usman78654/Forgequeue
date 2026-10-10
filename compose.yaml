@@ -24,7 +24,7 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:RELEASE.2025-02-07T23-21-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z
     command: server /data --console-address :9001
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -32,7 +32,7 @@ services:
     ports: ["9000:9000", "9001:9001"]
     volumes: ["minio-data:/data"]
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      test: ["CMD", "mc", "ready", "local"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -43,6 +43,7 @@ services:
       args: { TARGET: migrate }
     environment:
       DATABASE_URL: postgres://queue:queue@postgres:5432/queue?sslmode=disable
+    command: ["-seed-development"]
     depends_on:
       postgres: { condition: service_healthy }
     restart: "no"
@@ -64,6 +65,8 @@ services:
       S3_BUCKET: forgequeue
       ARTIFACT_MAX_BYTES: 52428800
       ARTIFACT_RETENTION: 168h
+      WEB_SESSION_DURATION: 8h
+      WEB_SESSION_SECURE_COOKIE: "false"
     ports: ["${API_PORT:-18080}:8080"]
     depends_on:
       migrate: { condition: service_completed_successfully }

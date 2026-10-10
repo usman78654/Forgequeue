@@ -22,6 +22,14 @@ var files embed.FS
 
 const advisoryLockID int64 = 734627581926
 
+var developmentPrincipals = []struct {
+	Name, Role, Token, Prefix string
+}{
+	{"local-admin", "admin", "fq_admin_dev", "fq_adm"},
+	{"local-operator", "operator", "fq_operator_dev", "fq_ope"},
+	{"local-viewer", "viewer", "fq_viewer_dev", "fq_vie"},
+}
+
 type Migration struct {
 	Version             int64
 	Name, SQL, Checksum string
@@ -113,6 +121,27 @@ func Run(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 	}
 	return nil
+}
+
+// SeedDevelopment installs deterministic credentials for local demos. Callers must
+// opt in explicitly; the forward cleanup migration removes legacy seeded rows.
+func SeedDevelopment(ctx context.Context, pool *pgxpool.Pool) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	for _, principal := range developmentPrincipals {
+		var principalID string
+		if err = tx.QueryRow(ctx, `INSERT INTO principals(name,role) VALUES($1,$2::principal_role) ON CONFLICT(name) DO UPDATE SET role=EXCLUDED.role RETURNING id`, principal.Name, principal.Role).Scan(&principalID); err != nil {
+			return fmt.Errorf("seed development principal %q: %w", principal.Name, err)
+		}
+		sum := sha256.Sum256([]byte(principal.Token))
+		if _, err = tx.Exec(ctx, `INSERT INTO api_keys(principal_id,name,key_hash,prefix) VALUES($1,'development',$2,$3) ON CONFLICT(principal_id,name) DO UPDATE SET key_hash=EXCLUDED.key_hash,prefix=EXCLUDED.prefix,expires_at=NULL,revoked_at=NULL`, principalID, sum[:], principal.Prefix); err != nil {
+			return fmt.Errorf("seed development key for %q: %w", principal.Name, err)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func baselineExisting(ctx context.Context, conn *pgxpool.Conn, version int64) (bool, error) {

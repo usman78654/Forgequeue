@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/usman78654/Forgequeue/internal/pagination"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/usman78654/Forgequeue/internal/pagination"
 )
 
 var ErrNotFound = errors.New("job not found")
@@ -724,12 +724,30 @@ func (s Store) SetWorkerState(ctx context.Context, id, state string) error {
 	return err
 }
 func (s Store) ReleaseWorkerJobs(ctx context.Context, workerID string) (int64, error) {
-	tx, err := s.DB.Begin(ctx); if err != nil { return 0, err }; defer tx.Rollback(ctx)
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
 	rows, err := tx.Query(ctx, `UPDATE jobs SET status=CASE WHEN status='cancelling' THEN 'cancelled'::job_status ELSE 'retrying'::job_status END,worker_id=NULL,lease_expires_at=NULL,scheduled_at=now(),updated_at=now(),finished_at=CASE WHEN status='cancelling' THEN now() ELSE NULL END,last_error=CASE WHEN status='running' THEN 'worker drain timeout' ELSE last_error END WHERE worker_id=$1 AND status IN ('running','cancelling') RETURNING id,lease_token`, workerID)
-	if err != nil { return 0, err }
+	if err != nil {
+		return 0, err
+	}
 	var n int64
-	for rows.Next() { var id string; var token int64; if err=rows.Scan(&id,&token); err != nil { rows.Close(); return 0,err }; n++; _, _ = tx.Exec(ctx, `UPDATE job_attempts SET finished_at=now(),error='worker drain timeout' WHERE job_id=$1 AND lease_token=$2 AND finished_at IS NULL`,id,token) }
-	rows.Close(); if err=rows.Err(); err != nil { return 0,err }
+	for rows.Next() {
+		var id string
+		var token int64
+		if err = rows.Scan(&id, &token); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		n++
+		_, _ = tx.Exec(ctx, `UPDATE job_attempts SET finished_at=now(),error='worker drain timeout' WHERE job_id=$1 AND lease_token=$2 AND finished_at IS NULL`, id, token)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return 0, err
+	}
 	return n, tx.Commit(ctx)
 }
 func retryDelay(j Job) time.Duration {
@@ -756,6 +774,10 @@ func retryDelay(j Job) time.Duration {
 }
 
 func nonRetryable(j Job, cause error) bool {
+	var permanent interface{ Permanent() bool }
+	if errors.As(cause, &permanent) && permanent.Permanent() {
+		return true
+	}
 	message := strings.ToLower(cause.Error())
 	for _, pattern := range j.NonRetryableErrors {
 		if pattern != "" && strings.Contains(message, strings.ToLower(pattern)) {

@@ -117,7 +117,9 @@ Event pages return `items`, `next_after`, and `has_more`. Each job retains its n
 
 ## API behavior
 
-All `/v1` endpoints require `Authorization: Bearer API_KEY`. Development-only keys installed by migration 007 are `fq_admin_dev`, `fq_operator_dev`, and `fq_viewer_dev`. Replace or revoke them outside local development. Admins can create principals and one-time API-key tokens through `/v1/admin/principals` and `/v1/admin/principals/{id}/keys`; stored credentials contain only SHA-256 digests.
+All `/v1` endpoints require authentication. CLI and service clients use `Authorization: Bearer API_KEY`. The web console sends an API key once to `POST /v1/session`, then uses a short-lived server-side session in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie. Session and CSRF tokens are stored only as SHA-256 digests; unsafe cookie-authenticated requests also require the in-memory `X-CSRF-Token` returned by the session endpoint. Set `WEB_SESSION_SECURE_COOKIE=false` only for local HTTP development; it defaults to `true`.
+
+Docker Compose explicitly runs the migrator with `-seed-development`, which installs the local-only keys `fq_admin_dev`, `fq_operator_dev`, and `fq_viewer_dev`. Normal migrations never create credentials; do not use the seed flag outside disposable local environments. Admins can create principals and one-time API-key tokens through `/v1/admin/principals` and `/v1/admin/principals/{id}/keys`; stored credentials contain only SHA-256 digests.
 
 Retry requests accept `retry_policy` (`fixed`, `linear`, or `exponential`), `retry_initial_seconds`, `retry_max_seconds`, `retry_jitter`, and `non_retryable_errors`.
 
@@ -163,6 +165,37 @@ Supported demo job types:
 - `sleep`: accepts `{"duration":"2s"}` and demonstrates timeouts.
 - `command`: accepts `{"command":"...","args":[]}`. Use only with trusted inputs.
 
+### Go handler SDK
+
+Application workers can register strict, typed handlers through the public `handler` package. Invalid payloads and errors wrapped with `handler.Permanent` bypass retries and move directly to dead-letter state; cancellation is delivered through the standard Go context.
+
+```go
+type ResizeImage struct {
+    Source string `json:"source"`
+}
+type ResizeResult struct {
+    Width int `json:"width"`
+}
+
+registry := handler.NewRegistry()
+handler.RegisterJSON(registry, "resize-image", func(ctx context.Context, input ResizeImage, report handler.Reporter) (ResizeResult, error) {
+    report.Progress(0.5, "image decoded")
+    report.Log("info", "resize complete", nil)
+    return ResizeResult{Width: 1280}, nil
+})
+
+err := worker.Run(ctx, worker.Config{
+    DatabaseURL: os.Getenv("DATABASE_URL"),
+    RabbitMQURL: os.Getenv("RABBITMQ_URL"),
+    Queues:      []string{"jobs.images"},
+    Handlers:    registry,
+})
+```
+
+The public worker runner derives capabilities from registered job types, supplies sensible concurrency and lease defaults, and gracefully drains when its context is cancelled. Registries reject duplicate job types and contain handler panics so one bad job cannot terminate a worker loop.
+
+A complete compilable worker is available in `examples/custom-worker`. Handler-managed artifact uploads remain on the production-hardening roadmap.
+
 ## Development
 
 The host does not need Go installed; use `make test` or its equivalent:
@@ -171,6 +204,6 @@ The host does not need Go installed; use `make test` or its equivalent:
 docker compose run --rm api go test ./...
 ```
 
-Versioned, checksummed migrations run through the dedicated `migrate` service before API and worker startup. Migration SQL is stored under `internal/migrations/sql`.
+Versioned, checksummed migrations run through the dedicated `migrate` service before API and worker startup. Migration SQL is stored under `internal/migrations/sql`. For a local database outside Compose, run `go run ./cmd/migrate -seed-development`; omit the flag everywhere else.
 
 Build the React console after frontend changes with `cd frontend && npm install && npm run build`, then copy `frontend/dist` into `internal/httpapi/web` before rebuilding the API image. The committed production bundle keeps normal Go/Docker builds independent of Node.

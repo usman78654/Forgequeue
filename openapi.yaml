@@ -2,13 +2,43 @@ openapi: 3.1.0
 info:
   title: ForgeQueue API
   version: 0.6.0
+servers:
+  - url: http://localhost:18080
+    description: Local Docker Compose API
 security:
   - bearerAuth: []
+  - cookieAuth: []
 paths:
   /healthz:
-    get: {responses: {'200': {description: Healthy}}}
+    get:
+      summary: Check process health
+      security: []
+      responses: {'200': {description: Healthy}}
   /readyz:
-    get: {responses: {'200': {description: Ready}, '503': {description: Not ready}}}
+    get:
+      summary: Check dependency readiness
+      security: []
+      responses: {'200': {description: Ready}, '503': {description: Not ready}}
+  /v1/session:
+    post:
+      summary: Exchange an API key for an expiring browser session
+      security: [{bearerAuth: []}]
+      responses:
+        '201': {description: Session created and HttpOnly cookie set, content: {application/json: {schema: {$ref: '#/components/schemas/WebSession'}}}}
+        '401': {description: 'API key invalid, expired, or revoked'}
+    get:
+      summary: Restore a browser session and rotate its CSRF token
+      security: [{cookieAuth: []}]
+      responses:
+        '200': {description: Active session, content: {application/json: {schema: {$ref: '#/components/schemas/WebSession'}}}}
+        '401': {description: 'Session missing, expired, or revoked'}
+    delete:
+      summary: Revoke the current browser session
+      security: [{cookieAuth: []}]
+      parameters: [{$ref: '#/components/parameters/CSRFToken'}]
+      responses:
+        '204': {description: Session revoked and cookie cleared}
+        '403': {description: CSRF token missing or invalid}
   /v1/jobs:
     get:
       summary: List jobs with cursor pagination and filters
@@ -27,15 +57,18 @@ paths:
       responses: {'201': {description: Created}, '200': {description: Existing idempotent submission}, '400': {description: Invalid request}}
   /v1/jobs/{id}:
     get:
+      summary: Get a job
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'200': {description: Job}, '404': {description: Not found}}
   /v1/jobs/{id}/cancel:
     post:
+      summary: Cancel a queued or running job
       parameters: [{$ref: '#/components/parameters/ID'}]
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
       responses: {'204': {description: Cancelled}, '409': {description: Cannot cancel}}
   /v1/jobs/{id}/attempts:
     get:
+      summary: List execution attempts for a job
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'200': {description: Execution attempts}}
   /v1/jobs/{id}/events:
@@ -62,6 +95,7 @@ paths:
         '404': {description: Job not found}
   /v1/jobs/{id}/requeue:
     post:
+      summary: Requeue a dead-lettered job
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'204': {description: Dead job requeued}, '409': {description: Job is not dead}}
   /v1/jobs/{id}/artifacts:
@@ -100,18 +134,33 @@ paths:
       responses: {'201': {description: Created}, '400': {description: Invalid DAG}}
   /v1/workflows/{id}:
     get:
+      summary: Get a workflow and its steps
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'200': {description: Workflow}, '404': {description: Not found}}
   /v1/workflows/{id}/cancel:
     post:
+      summary: Cancel a workflow
       parameters: [{$ref: '#/components/parameters/ID'}]
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
       responses: {'204': {description: Cancelled}}
   /v1/schedules:
-    get: {responses: {'200': {description: Schedules}}}
+    get:
+      summary: List recurring schedules
+      responses: {'200': {description: Schedules}}
     post:
+      summary: Create a recurring schedule
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
       responses: {'201': {description: Created}}
+  /v1/schedules/{id}/enable:
+    post:
+      summary: Enable a recurring schedule
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'204': {description: Enabled}, '404': {description: Not found}}
+  /v1/schedules/{id}/disable:
+    post:
+      summary: Disable a recurring schedule
+      parameters: [{$ref: '#/components/parameters/ID'}]
+      responses: {'204': {description: Disabled}, '404': {description: Not found}}
   /v1/workers:
     get:
       summary: List registered workers and heartbeat health
@@ -135,6 +184,10 @@ paths:
       summary: Create a one-time API key token (admin only)
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'201': {description: Key created; plaintext token is returned only once}}
+  /v1/admin/keys:
+    get:
+      summary: List API key metadata without secret values (admin only)
+      responses: {'200': {description: API key metadata and owning principals}, '403': {description: Admin role required}}
   /v1/admin/keys/{id}:
     delete:
       summary: Revoke an API key (admin only)
@@ -153,9 +206,25 @@ paths:
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: API key}
+    cookieAuth: {type: apiKey, in: cookie, name: fq_session}
   parameters:
     ID: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    CSRFToken: {name: X-CSRF-Token, in: header, required: true, schema: {type: string}, description: Required on unsafe requests authenticated by the browser session cookie}
   schemas:
+    Principal:
+      type: object
+      required: [id, name, role]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        role: {type: string, enum: [viewer, operator, admin]}
+    WebSession:
+      type: object
+      required: [principal, csrf_token, expires_at]
+      properties:
+        principal: {$ref: '#/components/schemas/Principal'}
+        csrf_token: {type: string, description: Send as X-CSRF-Token on unsafe cookie-authenticated requests}
+        expires_at: {type: string, format: date-time}
     Cancellation:
       type: object
       properties: {reason: {type: string}}

@@ -13,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/usman78654/Forgequeue/internal/artifacts"
 	"github.com/usman78654/Forgequeue/internal/auth"
 	"github.com/usman78654/Forgequeue/internal/broker"
@@ -21,9 +24,6 @@ import (
 	"github.com/usman78654/Forgequeue/internal/schedules"
 	"github.com/usman78654/Forgequeue/internal/tracing"
 	"github.com/usman78654/Forgequeue/internal/workflows"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var submitted = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "forgequeue_jobs_submitted_total", Help: "Submitted jobs."}, []string{"type"})
@@ -34,18 +34,28 @@ var webAssets embed.FS
 func init() { prometheus.MustRegister(submitted) }
 
 type Server struct {
-	store     jobs.Store
-	workflows workflows.Store
-	schedules schedules.Store
-	db        *pgxpool.Pool
-	rabbit    *broker.Rabbit
-	artifacts *artifacts.Store
-	mux       *http.ServeMux
+	store               jobs.Store
+	workflows           workflows.Store
+	schedules           schedules.Store
+	db                  *pgxpool.Pool
+	rabbit              *broker.Rabbit
+	artifacts           *artifacts.Store
+	mux                 *http.ServeMux
+	sessionDuration     time.Duration
+	secureSessionCookie bool
 }
 
 func New(db *pgxpool.Pool, rabbit *broker.Rabbit) *Server {
-	s := &Server{store: jobs.Store{DB: db}, workflows: workflows.Store{DB: db}, schedules: schedules.Store{DB: db}, db: db, rabbit: rabbit, mux: http.NewServeMux()}
+	s := &Server{store: jobs.Store{DB: db}, workflows: workflows.Store{DB: db}, schedules: schedules.Store{DB: db}, db: db, rabbit: rabbit, mux: http.NewServeMux(), sessionDuration: 8 * time.Hour}
 	s.routes()
+	return s
+}
+
+func (s *Server) ConfigureWebSessions(duration time.Duration, secureCookie bool) *Server {
+	if duration > 0 {
+		s.sessionDuration = duration
+	}
+	s.secureSessionCookie = secureCookie
 	return s
 }
 func NewWithArtifacts(db *pgxpool.Pool, rabbit *broker.Rabbit, artifactStore *artifacts.Store) *Server {
@@ -90,8 +100,63 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /v1/admin/quotas/{id}", s.updateQuota)
 	s.mux.HandleFunc("POST /v1/admin/principals", s.createPrincipal)
 	s.mux.HandleFunc("POST /v1/admin/principals/{id}/keys", s.createAPIKey)
+	s.mux.HandleFunc("GET /v1/admin/keys", s.listAPIKeys)
 	s.mux.HandleFunc("DELETE /v1/admin/keys/{id}", s.revokeAPIKey)
 	s.mux.HandleFunc("GET /v1/admin/audit", s.auditLog)
+	s.mux.HandleFunc("POST /v1/session", s.createWebSession)
+	s.mux.HandleFunc("GET /v1/session", s.refreshWebSession)
+	s.mux.HandleFunc("DELETE /v1/session", s.deleteWebSession)
+}
+
+func (s *Server) createWebSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if _, exists := auth.SessionID(r.Context()); exists {
+		problem(w, http.StatusConflict, "session already active", "disconnect the current web session before creating another")
+		return
+	}
+	principal, ok := auth.FromContext(r.Context())
+	if !ok {
+		problem(w, http.StatusUnauthorized, "authentication required", "a valid API key is required")
+		return
+	}
+	session, token, err := auth.CreateWebSession(r.Context(), s.db, principal, s.sessionDuration)
+	if err != nil {
+		problem(w, http.StatusInternalServerError, "session creation failed", "the web session could not be created")
+		return
+	}
+	auth.SetSessionCookie(w, token, session.ExpiresAt, s.secureSessionCookie)
+	jsonResponse(w, http.StatusCreated, session)
+}
+
+func (s *Server) refreshWebSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	sessionID, ok := auth.SessionID(r.Context())
+	if !ok {
+		problem(w, http.StatusUnauthorized, "web session required", "no active web session was found")
+		return
+	}
+	principal, _ := auth.FromContext(r.Context())
+	session, err := auth.RotateSessionCSRF(r.Context(), s.db, sessionID, principal)
+	if err != nil {
+		problem(w, http.StatusUnauthorized, "session refresh failed", "the web session is no longer active")
+		return
+	}
+	jsonResponse(w, http.StatusOK, session)
+}
+
+func (s *Server) deleteWebSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	sessionID, ok := auth.SessionID(r.Context())
+	if !ok {
+		problem(w, http.StatusUnauthorized, "web session required", "no active web session was found")
+		return
+	}
+	if err := auth.RevokeWebSession(r.Context(), s.db, sessionID); err != nil {
+		problem(w, http.StatusInternalServerError, "session revocation failed", "the web session could not be revoked")
+		return
+	}
+	auth.ClearSessionCookie(w, s.secureSessionCookie)
+	w.WriteHeader(http.StatusNoContent)
 }
 func (s *Server) uploadArtifact(w http.ResponseWriter, r *http.Request) {
 	if s.artifacts == nil || !s.artifacts.Enabled() {
@@ -614,6 +679,29 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, 201, map[string]any{"key": key, "token": token, "warning": "the token is shown only once"})
+}
+func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query(r.Context(), `SELECT k.id,k.name,k.prefix,k.expires_at,k.last_used_at,k.revoked_at,k.created_at,p.id,p.name,p.role::text FROM api_keys k JOIN principals p ON p.id=k.principal_id ORDER BY k.created_at DESC LIMIT 200`)
+	if err != nil {
+		problem(w, 500, "API key lookup failed", err.Error())
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var key auth.Key
+		var principal auth.Principal
+		if err = rows.Scan(&key.ID, &key.Name, &key.Prefix, &key.ExpiresAt, &key.LastUsedAt, &key.RevokedAt, &key.CreatedAt, &principal.ID, &principal.Name, &principal.Role); err != nil {
+			problem(w, 500, "API key lookup failed", err.Error())
+			return
+		}
+		items = append(items, map[string]any{"key": key, "principal": principal})
+	}
+	if err = rows.Err(); err != nil {
+		problem(w, 500, "API key lookup failed", err.Error())
+		return
+	}
+	jsonResponse(w, 200, map[string]any{"items": items})
 }
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	if err := auth.RevokeKey(r.Context(), s.db, r.PathValue("id")); err != nil {
