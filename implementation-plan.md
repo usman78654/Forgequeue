@@ -34,6 +34,8 @@ Status: PLANNED, IN PROGRESS, COMPLETE, NEEDS INPUT, NEEDS ENVIRONMENT.
 
 ## Execution log
 
+- 2026-10-14: Follow-up CI fix: Trivy v0.28.0 resolves but references the unavailable setup-trivy v0.2.1 internally. Updated to Trivy action v0.36.0 pinned at ed142fd0673e97e23eac54620cfb913e5ce36c25 and explicitly selected scanner v0.70.0. Verified upstream manifests and Git refs for nested setup-trivy v0.2.6, cache v5.0.1/v5.0.5, checkout v6.0.1, the installer script commit and scanner release. HIGH/CRITICAL failures still stop CI; full GitHub execution is not claimed verified locally.
+
 - 2026-10-14: Fixed GitHub Actions setup failure by changing the Trivy action reference from nonexistent `0.28.0` to published `v0.28.0`. Verified the exact tag against the upstream Git repository; scanner configuration and version are otherwise unchanged.
 
 - 2026-10-14 publication checks: frontend typecheck/lint/format, 40 unit/component tests, production build/bundle budgets, all 20 desktop/mobile browser tests, all application Go package-root race tests and vet, Compose validation and staged-file secret scan passed. OpenAPI validated with the two documented warnings. Live MinIO integration remains skipped because TEST_S3_ENDPOINT is unavailable; no claim of full storage verification is made.
