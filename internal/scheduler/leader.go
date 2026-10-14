@@ -2,10 +2,10 @@ package scheduler
 
 import (
 	"context"
-	"github.com/usman78654/Forgequeue/internal/jobs"
-	"github.com/usman78654/Forgequeue/internal/schedules"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/usman78654/Forgequeue/internal/jobs"
+	"github.com/usman78654/Forgequeue/internal/schedules"
 	"log/slog"
 	"time"
 )

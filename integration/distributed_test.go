@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/usman78654/Forgequeue/internal/broker"
 	"github.com/usman78654/Forgequeue/internal/jobs"
 	"github.com/usman78654/Forgequeue/internal/schedules"
 	"github.com/usman78654/Forgequeue/internal/workflows"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func database(t *testing.T) (context.Context, *pgxpool.Pool) {

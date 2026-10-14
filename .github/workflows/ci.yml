@@ -32,7 +32,16 @@ jobs:
       - run: go mod tidy
       - run: git diff --exit-code -- go.mod go.sum
       - run: go run ./cmd/migrate -seed-development
-      - run: test -z "$(gofmt -l .)"
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          set -o pipefail
+          unformatted="$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)"
+          if [ -n "$unformatted" ]; then
+            printf '%s\n' "$unformatted"
+            echo "::error::Go files need formatting. Run gofmt -w on the listed files."
+            exit 1
+          fi
       - run: go vet ./...
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: govulncheck ./...

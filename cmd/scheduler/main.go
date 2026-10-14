@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/usman78654/Forgequeue/internal/config"
 	"github.com/usman78654/Forgequeue/internal/database"
 	"github.com/usman78654/Forgequeue/internal/scheduler"
 	"github.com/usman78654/Forgequeue/internal/tracing"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
 	"net/http"
 	"os"

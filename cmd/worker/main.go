@@ -2,19 +2,19 @@ package main
 
 import (
 	"context"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/usman78654/Forgequeue/internal/broker"
 	"github.com/usman78654/Forgequeue/internal/config"
 	"github.com/usman78654/Forgequeue/internal/database"
 	"github.com/usman78654/Forgequeue/internal/jobs"
 	"github.com/usman78654/Forgequeue/internal/tracing"
 	workerpkg "github.com/usman78654/Forgequeue/internal/worker"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 	"sync/atomic"
+	"syscall"
 )
 
 func main() {
@@ -44,7 +44,10 @@ func main() {
 	var draining atomic.Bool
 	metricsMux.Handle("GET /metrics", promhttp.Handler())
 	metricsMux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
-		if draining.Load() { http.Error(w, "worker draining", http.StatusServiceUnavailable); return }
+		if draining.Load() {
+			http.Error(w, "worker draining", http.StatusServiceUnavailable)
+			return
+		}
 		if !rabbit.Healthy() {
 			http.Error(w, "rabbitmq unavailable", http.StatusServiceUnavailable)
 			return

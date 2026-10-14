@@ -2,8 +2,8 @@ package broker
 
 import (
 	"context"
-	"github.com/usman78654/Forgequeue/internal/tracing"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/usman78654/Forgequeue/internal/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
