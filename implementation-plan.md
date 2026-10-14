@@ -34,6 +34,8 @@ Status: PLANNED, IN PROGRESS, COMPLETE, NEEDS INPUT, NEEDS ENVIRONMENT.
 
 ## Execution log
 
+- 2026-10-14: Fixed GitHub Actions setup failure by changing the Trivy action reference from nonexistent `0.28.0` to published `v0.28.0`. Verified the exact tag against the upstream Git repository; scanner configuration and version are otherwise unchanged.
+
 - 2026-10-14 publication checks: frontend typecheck/lint/format, 40 unit/component tests, production build/bundle budgets, all 20 desktop/mobile browser tests, all application Go package-root race tests and vet, Compose validation and staged-file secret scan passed. OpenAPI validated with the two documented warnings. Live MinIO integration remains skipped because TEST_S3_ENDPOINT is unavailable; no claim of full storage verification is made.
 
 - 2026-10-14: Owner requested documentation updates and GitHub publication of the enhancement and report-demo batch. Generated demo output, caches, browser results and secret files are excluded from version control/build context. CI now validates the standalone report-worker Compose configuration. Release tags and unfinished roadmap statuses are intentionally unchanged.
