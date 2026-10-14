@@ -42,7 +42,7 @@ jobs:
         run: |
           total="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
           awk -v total="$total" 'BEGIN { if (total < 5) { printf "coverage %.1f%% is below 5%%\n", total; exit 1 } }'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: go-coverage
           path: coverage.out
