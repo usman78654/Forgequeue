@@ -1,7 +1,7 @@
 # Standalone development worker; start the normal API/database/broker first.
 services:
   report-worker:
-    image: golang:1.23
+    image: golang:1.27.2
     working_dir: /src
     command: ["go", "run", "./examples/report-worker"]
     volumes:

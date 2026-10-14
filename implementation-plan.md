@@ -34,6 +34,8 @@ Status: PLANNED, IN PROGRESS, COMPLETE, NEEDS INPUT, NEEDS ENVIRONMENT.
 
 ## Execution log
 
+- 2026-10-14: Completed the CI security-remediation batch documented in docs/ci-remediation.md. The supplied 62 reachable findings were addressed by patched Go 1.27.2 and dependency upgrades; exact pinned govulncheck and Trivy scans now pass. Verified all six container builds, Go race/vet/format/mod checks (15.4% coverage), fresh Linux frontend quality/audit/identical embedded build, 20 browser tests and configuration gates. Infrastructure limitations and hosted-run status remain explicit; no scanner suppression or threshold reduction was used.
+
 - 2026-10-14: Fixed the Go-formatting CI failure: six tracked files required gofmt (scheduler/worker entry points, distributed integration tests, broker outbox, scheduler leadership and workflow store). Applied formatting without changing behavior. CI now checks tracked Go files and prints failing filenames instead of suppressing gofmt output; ignored dependencies are excluded without weakening the source formatting gate.
 
 - 2026-10-14: Follow-up CI fix: Trivy v0.28.0 resolves but references the unavailable setup-trivy v0.2.1 internally. Updated to Trivy action v0.36.0 pinned at ed142fd0673e97e23eac54620cfb913e5ce36c25 and explicitly selected scanner v0.70.0. Verified upstream manifests and Git refs for nested setup-trivy v0.2.6, cache v5.0.1/v5.0.5, checkout v6.0.1, the installer script commit and scanner release. HIGH/CRITICAL failures still stop CI; full GitHub execution is not claimed verified locally.

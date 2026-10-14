@@ -33,6 +33,8 @@ For a real offline DAG demo, see [sales report workflows](examples/report-worker
 
 ## Run
 
+Native builds require Go **1.27.2** or newer. CI and Docker use the patched baseline recorded in go.mod. See [CI security remediation](docs/ci-remediation.md) for dependency updates and verified checks.
+
 ```sh
 docker compose up --build
 ```

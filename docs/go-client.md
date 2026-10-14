@@ -1,6 +1,6 @@
 # Go API client
 
-The initial versioned client lives at `github.com/usman78654/Forgequeue/client/v1`. It requires Go 1.23 and has no additional dependencies. It supports typed job submission, inspection, cancellation, requeue and cursor pages; `Do` covers other JSON v1 endpoints with application-owned response types. Streaming events and artifact transfers are not supported by this initial client.
+The initial versioned client lives at `github.com/usman78654/Forgequeue/client/v1`. The module requires Go 1.27.2; the client package itself uses only the standard library. It supports typed job submission, inspection, cancellation, requeue and cursor pages; `Do` covers other JSON v1 endpoints with application-owned response types. Streaming events and artifact transfers are not supported by this initial client.
 
 ```go
 api, err := v1.New(os.Getenv("FORGEQUEUE_URL"), os.Getenv("FORGEQUEUE_API_KEY"), nil)

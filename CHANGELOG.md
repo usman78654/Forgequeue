@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Upgraded the Go baseline to 1.27.2 across the module, CI, Docker and report worker; refreshed vulnerable direct/transitive dependencies and pinned govulncheck v1.9.0. Verified zero source-vulnerability, Trivy HIGH/CRITICAL and npm-audit findings without disabling security gates.
+
 - Added runnable offline report workflows and a dedicated typed-handler worker: parallel dataset reads, validated joins, real report files and a permanent-error/fail-fast demo, with unit and PostgreSQL integration tests.
 
 - Added versioned Go client, authenticated maintenance commands, cursor list navigation, live job activity, attempt/artifact inspection, admin creation/quota tools, DAG import/export safeguards and theme selection.
