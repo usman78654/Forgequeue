@@ -1,0 +1,5 @@
+[
+  {"id":"c-001","name":"Northwind Books","region":"North"},
+  {"id":"c-002","name":"Sunrise Studio","region":"South"},
+  {"id":"c-003","name":"Cedar Supplies","region":"North"}
+]

@@ -58,6 +58,23 @@ export interface JobDetail extends Job {
   result?: unknown;
   error?: string;
   events: JobEvent[];
+  attempts?: JobAttempt[];
+}
+
+export interface JobAttempt {
+  attempt: number;
+  worker_id: string;
+  started_at: string;
+  finished_at?: string;
+  error?: string;
+}
+
+export interface Artifact {
+  id: string;
+  name: string;
+  size_bytes: number;
+  content_type: string;
+  expires_at: string;
 }
 
 export interface WorkflowSummary {
@@ -95,6 +112,7 @@ export interface Schedule {
 }
 
 export interface Worker {
+  active_jobs?: number;
   id: string;
   queue: string;
   concurrency: number;
@@ -110,6 +128,7 @@ export interface QueueControl {
   paused: boolean;
   max_concurrency: number | null;
   running: number;
+  depth?: number;
 }
 
 export interface APIKeyMetadata {

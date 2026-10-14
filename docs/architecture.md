@@ -2,44 +2,67 @@
 
 ForgeQueue uses PostgreSQL as the source of truth and RabbitMQ as the delivery signal.
 
-```text
-client -> REST API -> PostgreSQL jobs + outbox (one transaction)
-                         |                 |
-                         |            outbox relay
-                         |                 v
-                         +<----------- RabbitMQ -> workers
-
-Prometheus <- /metrics                          Grafana <- Prometheus
+```mermaid
+flowchart LR
+  C[Clients / TypeScript console] --> A[Authenticated REST API]
+  A --> P[(PostgreSQL: jobs, workflows, events, outbox)]
+  S[Leader-elected scheduler] --> P
+  P --> O[Transactional outbox relay]
+  O --> R[RabbitMQ delivery signals]
+  R --> W[Capability-routed workers]
+  W --> P
+  A --> B[(Private S3 artifacts)]
+  M[Prometheus] --> A
+  M --> S
+  M --> W
+  G[Grafana / Alertmanager] --> M
 ```
 
 ## Delivery and recovery model
 
 - Delivery is **at least once**. Workers atomically move a queued job to running before executing it.
 - A repeated delivery cannot execute a job that is no longer queued.
-- A lease protects work owned by a worker. If that worker crashes, the API recovery loop changes the expired job to retrying; the scheduler republishes it.
+- A renewable lease protects work owned by a worker. If that worker crashes, scheduler recovery changes expired work to retrying and queues another delivery. Lease tokens fence stale completion attempts; this does not make external handler side effects exactly once.
 - Submission and its outbox entry commit together. The relay may publish twice if it crashes between publish and marking the row, which is safe because claiming is guarded by job state.
 - An idempotency key gives clients exactly-one logical submission within the retained job history.
-- Failed attempts use exponential backoff with jitter. Exhausted jobs enter the `dead` state for inspection.
+- Failed attempts use the configured fixed, linear or exponential backoff, optional jitter and caps. Permanent errors and exhausted attempts enter the `dead` state for inspection.
 
-The first milestone supports built-in `echo`, `sleep`, and `command` handlers. Running arbitrary commands is intended for isolated demo workers only; production deployments should register trusted typed handlers instead.
+Built-in handlers include `echo`, `sleep`, and opt-in `command`. Running arbitrary commands is intended for isolated demo workers only; production deployments should register trusted typed handlers instead. Workers may subscribe to multiple queues and advertise capabilities. Per-queue pause/concurrency controls and per-principal quotas constrain dispatch and submission.
 
 ## Job state machine
 
-```text
-scheduled -> queued -> running -> succeeded
-                ^         |
-                |         +-> retrying -> queued
-                |         +-> dead
-                +---------------- (expired lease)
-
-scheduled/queued/retrying -> cancelled
-running -> cancelling -> cancelled
+```mermaid
+stateDiagram-v2
+  [*] --> queued: submit (scheduled_at can be in the future)
+  queued --> running: due delivery + atomic claim
+  retrying --> running: due delivery + atomic claim
+  running --> succeeded: fenced completion
+  running --> retrying: retryable failure / expired lease
+  running --> dead: permanent error / attempts exhausted
+  dead --> queued: authorized requeue
+  queued --> cancelled: cancel
+  retrying --> cancelled: cancel
+  running --> cancelling: request cancellation
+  cancelling --> cancelled: worker acknowledgement / recovery
 ```
 
-## Next milestones
+## Workflows and recovery
 
-1. Queue routing, rate limits, and per-tenant quotas.
-2. Conditional and compensation steps for saga-style workflows.
-3. OpenTelemetry traces and alert rules.
-4. Queue-depth autoscaling through KEDA or Prometheus Adapter.
-5. Go SDK, crash-injection integration tests, and load tests.
+```mermaid
+flowchart TD
+  V[Validate acyclic step graph] --> T[Create workflow and root jobs transactionally]
+  T --> E[Execute ready steps]
+  E --> C{Completion outcome}
+  C -->|success| D[Resolve outputs and release dependents]
+  D --> E
+  C -->|failure| F[Apply conditions and failure policy]
+  F -->|continue / failure branch| E
+  F -->|fail fast| X[Cancel blocked descendants]
+  F -->|saga| S[Execute configured compensation jobs]
+```
+
+Dynamic fan-out creates durable child steps and fan-in waits for their outputs. Cancellation, attempt history and bounded progress/log events are retained in PostgreSQL. SSE is a resumable view of durable events, not the delivery transport. Artifacts store bytes privately in object storage and metadata in PostgreSQL; failed deletion preserves metadata for a later cleanup attempt. Signed download URLs expire, and ownership is checked before issuance.
+
+Two or more scheduler replicas can run, but a PostgreSQL advisory lock permits one active leader. Standbys take over after leadership is lost. KEDA scales workers from RabbitMQ backlog; PostgreSQL remains authoritative if the broker is unavailable. OpenTelemetry links API, relay and worker operations; Prometheus alert rules cover backlog, failures, leases, workers, leadership and stalled outbox records.
+
+Interval schedules are implemented. Cron/time-zone schedules, durable signed webhooks, multipart/streaming artifacts, backup-safe reconciliation and measured production-scale claims are **not** implemented yet. See [implementation checklist](../implementation-plan.md), [improvement roadmap](../improvements.md), [deployment](../deploy/kubernetes/README.md) and [disaster recovery](disaster-recovery.md) for exact status and operational limitations.

@@ -74,6 +74,7 @@ export function Queues({api, notify, principal}: PageProps) {
               <th>Queue</th>
               <th>Status</th>
               <th>Running</th>
+              <th>Ready jobs</th>
               <th>Concurrency cap</th>
               <th>
                 <span className="sr-only">Actions</span>
@@ -88,6 +89,7 @@ export function Queues({api, notify, principal}: PageProps) {
                   <StatusBadge status={queue.paused ? 'paused' : 'running'} />
                 </td>
                 <td>{queue.running}</td>
+                <td>{queue.depth ?? 'Unknown'}</td>
                 <td>{queue.max_concurrency ?? 'Unlimited'}</td>
                 <td>
                   {canManage ? (

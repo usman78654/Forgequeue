@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: forgequeue, namespace: forgequeue}
+spec:
+  namespaceSelector: {matchNames: [forgequeue]}
+  selector:
+    matchExpressions:
+      - key: forgequeue-monitor
+        operator: In
+        values: [enabled]
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: {name: forgequeue-api, namespace: forgequeue}
+spec:
+  namespaceSelector: {matchNames: [forgequeue]}
+  selector: {matchLabels: {forgequeue-monitor: api}}
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics

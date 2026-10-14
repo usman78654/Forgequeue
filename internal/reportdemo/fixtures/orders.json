@@ -1,0 +1,7 @@
+[
+  {"id":"o-001","customer_id":"c-001","total_cents":12500},
+  {"id":"o-002","customer_id":"c-002","total_cents":8000},
+  {"id":"o-003","customer_id":"c-001","total_cents":4500},
+  {"id":"o-004","customer_id":"c-003","total_cents":20000},
+  {"id":"o-005","customer_id":"c-002","total_cents":3500}
+]

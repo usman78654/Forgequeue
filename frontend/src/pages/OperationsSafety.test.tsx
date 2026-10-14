@@ -53,16 +53,17 @@ describe('destructive operation safety', () => {
       principal: admin,
     };
     const request = vi.fn(async (path: string) =>
-      path === '/v1/admin/keys' ? {items: [record]} : undefined,
+      path === '/v1/admin/keys' ? {items: [record]} : {items: []},
     );
     render(<Administration api={apiMock(request)} notify={notify} principal={admin} />);
 
     await user.click(await screen.findByRole('button', {name: 'Revoke'}));
     expect(screen.getByRole('dialog', {name: 'Revoke API key?'})).toBeVisible();
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls.filter(([path]) => path === '/v1/admin/keys/key-1')).toHaveLength(0);
     await user.click(screen.getByRole('button', {name: 'Confirm revocation'}));
-    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(3));
-    expect(request.mock.calls[1]).toEqual(['/v1/admin/keys/key-1', {method: 'DELETE'}]);
+    await vi.waitFor(() =>
+      expect(request).toHaveBeenCalledWith('/v1/admin/keys/key-1', {method: 'DELETE'}),
+    );
   });
 
   it('confirms and requeues multiple selected dead jobs', async () => {
@@ -108,10 +109,10 @@ describe('destructive operation safety', () => {
     render(<Workflows api={apiMock(request)} notify={notify} principal={operator} />);
 
     await user.click(await screen.findByRole('button', {name: 'Cancel workflow'}));
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', {name: 'Confirm cancellation'}));
-    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(5));
-    expect(request.mock.calls[2]).toEqual([
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+    expect(request.mock.calls[1]).toEqual([
       '/v1/workflows/workflow-1/cancel',
       {method: 'POST', body: '{}'},
     ]);

@@ -86,6 +86,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /v1/jobs/{id}/artifacts", s.uploadArtifact)
 	s.mux.HandleFunc("GET /v1/jobs/{id}/artifacts", s.listArtifacts)
 	s.mux.HandleFunc("GET /v1/jobs/{id}/artifacts/{artifactID}/download", s.downloadArtifact)
+	s.mux.HandleFunc("DELETE /v1/jobs/{id}/artifacts/{artifactID}", s.deleteArtifact)
 	s.mux.HandleFunc("POST /v1/workflows", s.submitWorkflow)
 	s.mux.HandleFunc("GET /v1/workflows", s.listWorkflows)
 	s.mux.HandleFunc("GET /v1/workflows/{id}", s.getWorkflow)
@@ -206,6 +207,17 @@ func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, 200, map[string]any{"url": u, "expires_in": 900})
+}
+func (s *Server) deleteArtifact(w http.ResponseWriter, r *http.Request) {
+	if s.artifacts == nil || !s.artifacts.Enabled() {
+		problem(w, 503, "artifact storage unavailable", "object storage is not configured")
+		return
+	}
+	if err := s.artifacts.Delete(r.Context(), r.PathValue("id"), r.PathValue("artifactID")); err != nil {
+		problem(w, 400, "artifact deletion failed", "artifact could not be deleted; retry after checking storage availability")
+		return
+	}
+	w.WriteHeader(204)
 }
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 	if e := s.db.Ping(r.Context()); e != nil {
@@ -566,7 +578,7 @@ func (s *Server) setScheduleEnabled(w http.ResponseWriter, r *http.Request, enab
 	w.WriteHeader(204)
 }
 func (s *Server) listWorkers(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(r.Context(), `SELECT id,queue,queues,capabilities,concurrency,started_at,last_heartbeat_at,metadata,state,draining_at,(last_heartbeat_at>now()-interval '30 seconds' AND state='running') healthy FROM workers ORDER BY last_heartbeat_at DESC`)
+	rows, err := s.db.Query(r.Context(), `SELECT id,queue,queues,capabilities,concurrency,started_at,last_heartbeat_at,metadata,state,draining_at,(last_heartbeat_at>now()-interval '30 seconds' AND state='running') healthy,(SELECT count(*) FROM jobs j WHERE j.worker_id=workers.id AND j.status IN ('running','cancelling')) active_jobs FROM workers ORDER BY last_heartbeat_at DESC`)
 	if err != nil {
 		problem(w, 500, "worker lookup failed", err.Error())
 		return
@@ -581,16 +593,17 @@ func (s *Server) listWorkers(w http.ResponseWriter, r *http.Request) {
 		var metadata json.RawMessage
 		var drainingAt *time.Time
 		var healthy bool
-		if err = rows.Scan(&id, &queue, &queues, &capabilities, &concurrency, &started, &heartbeat, &metadata, &state, &drainingAt, &healthy); err != nil {
+		var activeJobs int
+		if err = rows.Scan(&id, &queue, &queues, &capabilities, &concurrency, &started, &heartbeat, &metadata, &state, &drainingAt, &healthy, &activeJobs); err != nil {
 			problem(w, 500, "worker lookup failed", err.Error())
 			return
 		}
-		items = append(items, map[string]any{"id": id, "queue": queue, "queues": queues, "capabilities": capabilities, "concurrency": concurrency, "started_at": started, "last_heartbeat_at": heartbeat, "metadata": metadata, "state": state, "draining_at": drainingAt, "healthy": healthy})
+		items = append(items, map[string]any{"id": id, "queue": queue, "queues": queues, "capabilities": capabilities, "concurrency": concurrency, "started_at": started, "last_heartbeat_at": heartbeat, "metadata": metadata, "state": state, "draining_at": drainingAt, "healthy": healthy, "active_jobs": activeJobs})
 	}
 	jsonResponse(w, 200, map[string]any{"items": items})
 }
 func (s *Server) listQueues(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(r.Context(), `SELECT DISTINCT q.queue,COALESCE(c.paused,false),c.max_concurrency,(SELECT count(*) FROM jobs j WHERE j.queue=q.queue AND j.status='running') running FROM (SELECT queue FROM jobs UNION SELECT queue FROM queue_controls) q LEFT JOIN queue_controls c ON c.queue=q.queue ORDER BY q.queue`)
+	rows, err := s.db.Query(r.Context(), `SELECT DISTINCT q.queue,COALESCE(c.paused,false),c.max_concurrency,(SELECT count(*) FROM jobs j WHERE j.queue=q.queue AND j.status='running') running,(SELECT count(*) FROM jobs j WHERE j.queue=q.queue AND j.status IN ('queued','retrying') AND j.scheduled_at<=now()) depth FROM (SELECT queue FROM jobs UNION SELECT queue FROM queue_controls) q LEFT JOIN queue_controls c ON c.queue=q.queue ORDER BY q.queue`)
 	if err != nil {
 		problem(w, 500, "queue lookup failed", err.Error())
 		return
@@ -601,12 +614,12 @@ func (s *Server) listQueues(w http.ResponseWriter, r *http.Request) {
 		var queue string
 		var paused bool
 		var max *int
-		var running int
-		if err = rows.Scan(&queue, &paused, &max, &running); err != nil {
+		var running, depth int
+		if err = rows.Scan(&queue, &paused, &max, &running, &depth); err != nil {
 			problem(w, 500, "queue lookup failed", err.Error())
 			return
 		}
-		items = append(items, map[string]any{"queue": queue, "paused": paused, "max_concurrency": max, "running": running})
+		items = append(items, map[string]any{"queue": queue, "paused": paused, "max_concurrency": max, "running": running, "depth": depth})
 	}
 	jsonResponse(w, 200, map[string]any{"items": items})
 }

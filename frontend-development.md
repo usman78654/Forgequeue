@@ -30,35 +30,37 @@ Status legend: `PLANNED`, `IN PROGRESS`, `COMPLETE`, `NEEDS ENVIRONMENT`, `BLOCK
 
 | # | Work item | Status | Completion criteria |
 |---|---|---|---|
-| F-13 | Live job activity | PLANNED | Resumable SSE drives live progress, structured logs, connection state, and retry timelines without polling loops |
-| F-14 | Artifact management | PLANNED | Authorized users can upload, list, download, and delete artifacts with progress, limits, expiry, and clear failure states |
-| F-15 | Queue operations | PLANNED | Operators can inspect queue depth, pause/resume queues, change concurrency caps, and see the effect on routing |
-| F-16 | Worker operations | PLANNED | Worker capabilities, queues, draining/offline state, heartbeat age, and active work are visible and filterable |
-| F-17 | Dead-letter operations | PLANNED | Dead jobs support inspection, selection, safe bulk requeue, and attempt/error comparison |
-| F-18 | Audit and tenant administration | PLANNED | Admin pages cover principals, one-time key creation, revocation, quotas, and searchable audit history without redisplaying secrets |
-| F-19 | Observability deep links | PLANNED | Job, workflow, worker, and queue views link to relevant metrics, traces, and runbooks using configured external URLs |
+| F-13 | Live job activity | IN PROGRESS | Resumable SSE drives live progress, structured logs, connection state, and retry timelines without polling loops |
+| F-14 | Artifact management | IN PROGRESS | Authorized users can upload, list, download, and delete artifacts with progress, limits, expiry, and clear failure states |
+| F-15 | Queue operations | IN PROGRESS | Operators can inspect queue depth, pause/resume queues, change concurrency caps, and see the effect on routing |
+| F-16 | Worker operations | IN PROGRESS | Worker capabilities, queues, draining/offline state, heartbeat age, and active work are visible and filterable |
+| F-17 | Dead-letter operations | IN PROGRESS | Dead jobs support inspection, selection, safe bulk requeue, and attempt/error comparison |
+| F-18 | Audit and tenant administration | IN PROGRESS | Admin pages cover principals, one-time key creation, revocation, quotas, and searchable audit history without redisplaying secrets |
+| F-19 | Observability deep links | IN PROGRESS | Job, workflow, worker, and queue views link to relevant metrics, traces, and runbooks using configured external URLs |
 
 ## Phase 3 — Product polish
 
 | # | Work item | Status | Completion criteria |
 |---|---|---|---|
-| F-20 | Reusable design system | PLANNED | Tokens and shared primitives cover color, typography, spacing, buttons, fields, badges, cards, tables, and overlays in light/dark themes |
-| F-21 | Advanced DAG editor | PLANNED | Keyboard-accessible node editing, validation, deletion, layout, step configuration, import/export, and unsaved-change protection are implemented |
-| F-22 | URL routing and deep links | PLANNED | Primary pages and resource detail views have stable URLs, refresh safely, and support browser back/forward navigation |
-| F-23 | Large-data behavior | PLANNED | Cursor pagination, filters, debouncing, virtualization where justified, cancellation, and stale-request protection handle production-sized datasets |
-| F-24 | User-facing documentation | PLANNED | Console setup, roles, workflows, troubleshooting, keyboard behavior, screenshots, and security expectations are documented |
+| F-20 | Reusable design system | IN PROGRESS | Tokens and shared primitives cover color, typography, spacing, buttons, fields, badges, cards, tables, and overlays in light/dark themes |
+| F-21 | Advanced DAG editor | IN PROGRESS | Keyboard-accessible node editing, validation, deletion, layout, step configuration, import/export, and unsaved-change protection are implemented |
+| F-22 | URL routing and deep links | IN PROGRESS | Primary pages and resource detail views have stable URLs, refresh safely, and support browser back/forward navigation |
+| F-23 | Large-data behavior | IN PROGRESS | Cursor pagination, filters, debouncing, virtualization where justified, cancellation, and stale-request protection handle production-sized datasets |
+| F-24 | User-facing documentation | IN PROGRESS | Console setup, roles, workflows, troubleshooting, keyboard behavior, screenshots, and security expectations are documented |
 
 ## Phase 4 — Security, resilience, and scale
 
 | # | Work item | Status | Completion criteria |
 |---|---|---|---|
 | F-25 | HttpOnly web sessions | COMPLETE | API keys are exchanged once for hashed, expiring, revocable server-side sessions using Secure/HttpOnly/SameSite cookies; unsafe requests require CSRF tokens; CLI Bearer authentication remains supported |
-| F-26 | Query and cache architecture | PLANNED | Requests support cancellation, deduplication, invalidation, bounded retry, background refresh, and stale-response protection without N+1 page loading |
+| F-26 | Query and cache architecture | COMPLETE | Requests support cancellation, deduplication, invalidation, bounded retry, background refresh, and stale-response protection without N+1 page loading |
 | F-27 | Error boundaries and degraded mode | COMPLETE | Render failures, expired sessions, offline state, and degraded broker/storage dependencies show recoverable screens with safe diagnostic context |
 | F-28 | Destructive-action safety | COMPLETE | Cancellation, key revocation, bulk requeue, queue pausing, and other consequential operations use role-aware confirmation and pending-state patterns |
 | F-29 | Bundle and runtime performance | COMPLETE | Route-level lazy loading excludes the DAG editor from initial load; bundle budgets, memoization, and justified virtualization are enforced in CI |
 
 ## Verification log
+
+- `2026-10-11` - Current enhancement batch: 40 component/API/hook tests, 20 desktop/mobile Playwright workflows, TypeScript, lint, formatting, production build and existing bundle budgets pass. New coverage includes stale requests, resumable activity, nested dialog dismissal, cyclic DAG imports, unsaved navigation guards, one-time secrets and quota confirmations. Broader frontend acceptance gaps remain explicitly IN PROGRESS.
 
 - `2026-10-11` - Completed F-01 by removing the unused monolithic entry and legacy API client. The application now builds exclusively from the modular shell, components, feature pages, and typed API boundary.
 - `2026-10-11` - Completed F-08. TypeScript checking, ESLint with React Hooks and accessibility rules, Prettier, Vitest, Testing Library, axe, and Playwright are wired into local scripts and CI. F-07, F-09, F-10, and F-11 remain in progress because their full migration and coverage criteria are broader than the initial gate infrastructure.
@@ -73,3 +75,5 @@ Status legend: `PLANNED`, `IN PROGRESS`, `COMPLETE`, `NEEDS ENVIRONMENT`, `BLOCK
 
 - `2026-10-08` — Plan created after source review plus rendered desktop and 390 px mobile inspection. Phase 0 implementation started.
 - `2026-10-08` — Completed memory-only authentication, responsive shell and data panels, accessible navigation/dialog/notification primitives, controlled request states, and deterministic Go-embedded builds. Modularization remains in progress until the unused legacy entry is removed.
+
+- `2026-10-11` - Completed F-26: abortable reads, stale-response protection, GET deduplication, opt-in short cache, mutation invalidation, bounded retries and background refresh. Workflow lists no longer perform N+1 requests. F-13 through F-24 are IN PROGRESS; implementation-plan.md records their remaining acceptance criteria.

@@ -3,6 +3,7 @@
 .vscode/
 bin/
 coverage.out
+demo-output/
 *.log
 .secrets/
 *.secret

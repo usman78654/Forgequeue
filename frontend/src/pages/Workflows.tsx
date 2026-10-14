@@ -1,39 +1,28 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useState} from 'react';
+import {usePageQuery} from '../hooks/usePageQuery';
+import {Pagination} from '../components/Pagination';
 import {Dialog} from '../components/Dialog';
 import {EmptyState, LoadingState, StatusBadge} from '../components/Feedback';
-import {
-  errorMessage,
-  type Page,
-  type PageProps,
-  type Workflow,
-  type WorkflowSummary,
-} from '../types';
+import {errorMessage, type PageProps, type Workflow, type WorkflowSummary} from '../types';
 
 export function Workflows({api, notify, principal}: PageProps) {
-  const [items, setItems] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Workflow | null>(null);
+  const query = usePageQuery<WorkflowSummary>(api, '/v1/workflows?limit=50', notify);
+  const {items, loading, load} = query;
+  const [detail, setDetail] = useState<Workflow | null>(null);
+  const [selected, setSelected] = useState<WorkflowSummary | null>(null);
   const [pending, setPending] = useState(false);
   const canMutate = principal?.role !== 'viewer';
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const inspect = async (id: string) => {
+    setPending(true);
     try {
-      const page = await api<Page<WorkflowSummary>>('/v1/workflows?limit=50');
-      const workflows = await Promise.all(
-        (page.items || []).map((workflow) => api<Workflow>(`/v1/workflows/${workflow.id}`)),
-      );
-      setItems(workflows);
+      setDetail(await api<Workflow>(`/v1/workflows/${id}`));
     } catch (error: unknown) {
       notify('error', errorMessage(error));
     } finally {
-      setLoading(false);
+      setPending(false);
     }
-  }, [api, notify]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  };
 
   const cancel = async () => {
     if (!selected) return;
@@ -65,13 +54,9 @@ export function Workflows({api, notify, principal}: PageProps) {
               <StatusBadge status={workflow.status} />
             </div>
             <p className="mono muted">{workflow.id.slice(0, 8)}</p>
-            <div className="steps">
-              {workflow.steps.map((step) => (
-                <span className="step" key={step.key}>
-                  {step.key}: {step.status}
-                </span>
-              ))}
-            </div>
+            <button onClick={() => inspect(workflow.id)} disabled={pending}>
+              Inspect steps
+            </button>
             {canMutate && ['pending', 'running'].includes(workflow.status) && (
               <button className="danger card-action" onClick={() => setSelected(workflow)}>
                 Cancel workflow
@@ -80,6 +65,18 @@ export function Workflows({api, notify, principal}: PageProps) {
           </article>
         ))}
       </div>
+      <Pagination {...query} />
+      {detail && (
+        <Dialog title={`Workflow ${detail.name}`} onClose={() => setDetail(null)}>
+          <div className="steps">
+            {detail.steps.map((step) => (
+              <span className="step" key={step.key}>
+                {step.key}: {step.status}
+              </span>
+            ))}
+          </div>
+        </Dialog>
+      )}
       {selected && (
         <Dialog
           title="Cancel workflow?"

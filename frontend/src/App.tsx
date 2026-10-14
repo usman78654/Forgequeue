@@ -7,14 +7,17 @@ import {ErrorBoundary} from './components/ErrorBoundary';
 import {Notice} from './components/Feedback';
 import {useOnlineStatus} from './hooks/useOnlineStatus';
 import {Jobs} from './pages/Jobs';
-import {Administration} from './pages/Administration';
-import {Queues} from './pages/Queues';
 import {Schedules} from './pages/Schedules';
 import {Workers} from './pages/Workers';
 import {Workflows} from './pages/Workflows';
 import type {NoticeKind, NoticeMessage, PageProps, View} from './types';
+import {allowNavigation, currentView, navigate, restoreRoute} from './routing';
 
 const Builder = lazy(() => import('./pages/Builder').then((module) => ({default: module.Builder})));
+const Administration = lazy(() =>
+  import('./pages/Administration').then((module) => ({default: module.Administration})),
+);
+const Queues = lazy(() => import('./pages/Queues').then((module) => ({default: module.Queues})));
 
 const pages: Record<View, ComponentType<PageProps>> = {
   Jobs,
@@ -29,7 +32,17 @@ const pages: Record<View, ComponentType<PageProps>> = {
 export default function App() {
   const [session, setSession] = useState<WebSession | null>(null);
   const [booting, setBooting] = useState(true);
-  const [view, setView] = useState<View>('Jobs');
+  const [view, setView] = useState<View>(currentView);
+  useEffect(() => {
+    const changed = () => {
+      const next = currentView();
+      if (next === view) return;
+      if (allowNavigation()) setView(next);
+      else restoreRoute(view);
+    };
+    window.addEventListener('hashchange', changed);
+    return () => window.removeEventListener('hashchange', changed);
+  }, [view]);
   const [notice, setNotice] = useState<NoticeMessage | null>(null);
   const [degradedMessage, setDegradedMessage] = useState('');
   const online = useOnlineStatus();
@@ -65,16 +78,20 @@ export default function App() {
     notify('success', `Connected as ${active.principal.name}.`);
   };
   const disconnect = async () => {
+    if (!allowNavigation()) return;
     if (session) await revokeWebSession(session.csrf_token).catch(() => undefined);
     setSession(null);
     setView('Jobs');
+    navigate('Jobs');
     notify('info', 'Web session ended.');
   };
   const Page = pages[view];
   return (
     <AppShell
       view={view}
-      onViewChange={setView}
+      onViewChange={(next) => {
+        navigate(next);
+      }}
       connected={Boolean(session)}
       principal={session?.principal}
       onDisconnect={disconnect}

@@ -733,7 +733,11 @@ func (s Store) ReleaseWorkerJobs(ctx context.Context, workerID string) (int64, e
 	if err != nil {
 		return 0, err
 	}
-	var n int64
+	type releasedJob struct {
+		id    string
+		token int64
+	}
+	var released []releasedJob
 	for rows.Next() {
 		var id string
 		var token int64
@@ -741,14 +745,18 @@ func (s Store) ReleaseWorkerJobs(ctx context.Context, workerID string) (int64, e
 			rows.Close()
 			return 0, err
 		}
-		n++
-		_, _ = tx.Exec(ctx, `UPDATE job_attempts SET finished_at=now(),error='worker drain timeout' WHERE job_id=$1 AND lease_token=$2 AND finished_at IS NULL`, id, token)
+		released = append(released, releasedJob{id: id, token: token})
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
 		return 0, err
 	}
-	return n, tx.Commit(ctx)
+	for _, job := range released {
+		if _, err = tx.Exec(ctx, `UPDATE job_attempts SET finished_at=now(),error='worker drain timeout' WHERE job_id=$1 AND lease_token=$2 AND finished_at IS NULL`, job.id, job.token); err != nil {
+			return 0, err
+		}
+	}
+	return int64(len(released)), tx.Commit(ctx)
 }
 func retryDelay(j Job) time.Duration {
 	initial, maximum := float64(j.RetryInitialSeconds), float64(j.RetryMaxSeconds)

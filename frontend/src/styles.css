@@ -23,6 +23,71 @@
   --info: #78bfff;
   --radius: 12px;
 }
+:root[data-theme='light'] {
+  color-scheme: light;
+  color: #162b45;
+  --bg: #f1f5fa;
+  --sidebar: #e5edf7;
+  --panel: #fff;
+  --panel-raised: #eef3fa;
+  --line: #b7c6da;
+  --accent: #08765a;
+  --accent-strong: #096b53;
+  --muted: #475c76;
+  --danger: #9b2535;
+  --warning: #795100;
+  --info: #155a97;
+  background: var(--bg);
+}
+:root[data-theme='light'] button {
+  color: #162b45;
+  background: #e5edf7;
+}
+:root[data-theme='light'] button.primary {
+  color: #fff;
+  background: var(--accent);
+}
+:root[data-theme='light'] button.danger {
+  color: #fff;
+  background: #9b2535;
+}
+:root[data-theme='light'] input,
+:root[data-theme='light'] select,
+:root[data-theme='light'] textarea {
+  color: #162b45;
+  background: #fff;
+}
+:root[data-theme='light'] .state-card strong,
+:root[data-theme='light'] .session-principal {
+  color: #162b45;
+}
+:root[data-theme='light'] nav button.active {
+  color: #fff;
+  background: #244b76;
+}
+:root[data-theme='light'] th {
+  color: #355579;
+}
+:root[data-theme='light'] .status,
+:root[data-theme='light'] .step {
+  background: #e8eef7;
+}
+:root[data-theme='light'] .status.succeeded,
+:root[data-theme='light'] .status.healthy,
+:root[data-theme='light'] .status.active {
+  color: #096447;
+}
+:root[data-theme='light'] tbody tr:hover,
+:root[data-theme='light'] .table-panel tbody tr:hover td:last-child {
+  background: #eef3fa;
+}
+:root[data-theme='light'] .canvas {
+  background: #e8eef7;
+}
+:root[data-theme='light'] .link-button,
+:root[data-theme='light'] a {
+  color: #14578f;
+}
 
 * {
   box-sizing: border-box;

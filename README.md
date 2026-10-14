@@ -1,6 +1,6 @@
 # ForgeQueue
 
-A portfolio-grade distributed job queue and workflow engine built with Go, PostgreSQL, and RabbitMQ. This repository currently contains milestone 1: a runnable durable job queue vertical slice.
+A distributed job queue and workflow engine built with Go, PostgreSQL, and RabbitMQ, with an embedded TypeScript operations console, a typed Go worker SDK, and durable workflow orchestration.
 
 ## Included now
 
@@ -23,11 +23,13 @@ A portfolio-grade distributed job queue and workflow engine built with Go, Postg
 - Multi-queue workers, capability routing, queue controls, and concurrency caps
 - Per-principal submission, concurrency, payload, and schedule quotas
 - OpenTelemetry tracing through API, outbox, RabbitMQ, workers, and workflows
-- Embedded React operations console and visual SVG DAG builder
+- Embedded React operations console and React Flow DAG builder
 - JSON logs, health/readiness endpoints, Prometheus metrics, and provisioned Grafana
 - OpenAPI contract, CLI, GitHub Actions CI, and Kubernetes scaling manifests
 
-See [architecture](docs/architecture.md) for reliability semantics and upcoming workflow milestones.
+See [architecture](docs/architecture.md) for reliability semantics, [Go client](docs/go-client.md) for API integration, and [implementation checklist](implementation-plan.md) for completed and remaining improvements.
+
+For a real offline DAG demo, see [sales report workflows](examples/report-worker/README.md): parallel dataset loading, validated joins, integer-cent totals, a generated Markdown file, and a permanent-error example that blocks downstream work.
 
 ## Run
 
@@ -206,4 +208,6 @@ docker compose run --rm api go test ./...
 
 Versioned, checksummed migrations run through the dedicated `migrate` service before API and worker startup. Migration SQL is stored under `internal/migrations/sql`. For a local database outside Compose, run `go run ./cmd/migrate -seed-development`; omit the flag everywhere else.
 
-Build the React console after frontend changes with `cd frontend && npm install && npm run build`, then copy `frontend/dist` into `internal/httpapi/web` before rebuilding the API image. The committed production bundle keeps normal Go/Docker builds independent of Node.
+Build the React console after frontend changes with `cd frontend && npm ci && npm run build`. Vite writes directly into `internal/httpapi/web`; no copy step is required. Run `npm run quality`, `npm run bundle:check`, and `npm run test:e2e` to verify frontend changes. The committed production bundle keeps normal Go/Docker builds independent of Node.
+
+See [console documentation](docs/console.md) for navigation, operational workflows and troubleshooting, and [the implementation checklist](implementation-plan.md) for remaining development.

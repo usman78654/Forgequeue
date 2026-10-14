@@ -47,6 +47,8 @@ This file is updated as features are implemented and verified. A feature is only
 
 ## Verification log
 
+- `2026-10-11` — Extended the console with cursor navigation, debounced filters, resumable live activity, attempt/artifact inspection, confirmed artifact deletion, worker active-work counts, administration tools, DAG import/export and unsaved-change protection, themes and configurable observability links. See implementation-plan.md and frontend-development.md for remaining acceptance criteria; this entry does not mark the broader enhancement roadmap complete.
+
 - `2026-10-08` — Started the public Go handler SDK with typed payload/result support, durable reporting adapters, panic isolation, permanent-error retry classification, and built-in worker handler migration.
 
 - `2026-09-29` — Migration runner passed upgrade-baseline and clean-database checks with three ordered checksummed migrations.

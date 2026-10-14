@@ -19,6 +19,10 @@ export function Dialog({title, children, onClose, actions}: DialogProps) {
     const restoreFocus = previousFocus.current;
     dialog?.querySelector<HTMLElement>('button, input, select, textarea')?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
+      // Only the topmost dialog owns keyboard dismissal and focus trapping.
+      // Artifact confirmations can be opened inside a job-inspection dialog.
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialog) return;
       if (event.key === 'Escape') onClose();
       if (event.key !== 'Tab' || !dialog) return;
       const focusable = Array.from(

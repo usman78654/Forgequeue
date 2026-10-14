@@ -56,7 +56,9 @@ describe('session API client', () => {
     const onError = vi.fn();
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(response({detail: 'Broker unavailable'}, 503)),
+      vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(response({detail: 'Broker unavailable'}, 503))),
     );
 
     await expect(createApiClient('csrf-token', onError)('/v1/jobs')).rejects.toMatchObject({
@@ -66,5 +68,32 @@ describe('session API client', () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({status: 503, message: 'Broker unavailable'}),
     );
+  });
+});
+
+describe('query concurrency', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('shares concurrent reads but never retries a mutation', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response({items: []})));
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createApiClient('csrf');
+    await Promise.all([api('/v1/jobs'), api('/v1/jobs')]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockImplementation(() => Promise.resolve(response({detail: 'unavailable'}, 503)));
+    await expect(api('/v1/jobs', {method: 'POST', body: '{}'})).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+  it('invalidates cached reads after mutations', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response({items: []})));
+    vi.stubGlobal('fetch', fetchMock);
+    const api = createApiClient('csrf');
+    await api('/v1/jobs');
+    await api('/v1/jobs', {cache: 'force-cache'});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await api('/v1/jobs', {method: 'POST', body: '{}'});
+    await api('/v1/jobs', {cache: 'force-cache'});
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

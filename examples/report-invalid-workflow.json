@@ -1,0 +1,9 @@
+{
+  "name": "demo-sales-report-invalid-customer",
+  "fail_fast": true,
+  "steps": [
+    {"key":"customers","type":"report.read-customers","queue":"jobs.reports","payload":{}},
+    {"key":"aggregate","type":"report.aggregate","queue":"jobs.reports","max_attempts":3,"depends_on":["customers"],"payload":{"customers":"${{ steps.customers.output.customers }}","orders":[{"id":"invalid-order","customer_id":"missing-customer","total_cents":1000}]}},
+    {"key":"report","type":"report.render","queue":"jobs.reports","depends_on":["aggregate"],"payload":{"summary":"${{ steps.aggregate.output.summary }}"}}
+  ]
+}

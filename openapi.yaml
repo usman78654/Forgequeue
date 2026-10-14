@@ -11,28 +11,33 @@ security:
 paths:
   /healthz:
     get:
+      operationId: getHealthz
       summary: Check process health
       security: []
-      responses: {'200': {description: Healthy}}
+      responses: {'200': {description: Healthy}, '400': {description: 'Invalid request'}}
   /readyz:
     get:
+      operationId: getReadyz
       summary: Check dependency readiness
       security: []
-      responses: {'200': {description: Ready}, '503': {description: Not ready}}
+      responses: {'200': {description: Ready}, '503': {description: Not ready}, '400': {description: 'Invalid request'}}
   /v1/session:
     post:
+      operationId: postV1Session
       summary: Exchange an API key for an expiring browser session
       security: [{bearerAuth: []}]
       responses:
         '201': {description: Session created and HttpOnly cookie set, content: {application/json: {schema: {$ref: '#/components/schemas/WebSession'}}}}
         '401': {description: 'API key invalid, expired, or revoked'}
     get:
+      operationId: getV1Session
       summary: Restore a browser session and rotate its CSRF token
       security: [{cookieAuth: []}]
       responses:
         '200': {description: Active session, content: {application/json: {schema: {$ref: '#/components/schemas/WebSession'}}}}
         '401': {description: 'Session missing, expired, or revoked'}
     delete:
+      operationId: deleteV1Session
       summary: Revoke the current browser session
       security: [{cookieAuth: []}]
       parameters: [{$ref: '#/components/parameters/CSRFToken'}]
@@ -41,6 +46,7 @@ paths:
         '403': {description: CSRF token missing or invalid}
   /v1/jobs:
     get:
+      operationId: getV1Jobs
       summary: List jobs with cursor pagination and filters
       parameters:
         - {name: status, in: query, schema: {type: string}}
@@ -52,27 +58,32 @@ paths:
         - {name: limit, in: query, schema: {type: integer, maximum: 100}}
       responses: {'200': {description: Job page}, '400': {description: Invalid cursor or timestamp}}
     post:
+      operationId: postV1Jobs
       summary: Submit a job
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/JobSubmission'}}}}
       responses: {'201': {description: Created}, '200': {description: Existing idempotent submission}, '400': {description: Invalid request}}
   /v1/jobs/{id}:
     get:
+      operationId: getV1JobsId
       summary: Get a job
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'200': {description: Job}, '404': {description: Not found}}
   /v1/jobs/{id}/cancel:
     post:
+      operationId: postV1JobsIdCancel
       summary: Cancel a queued or running job
       parameters: [{$ref: '#/components/parameters/ID'}]
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
       responses: {'204': {description: Cancelled}, '409': {description: Cannot cancel}}
   /v1/jobs/{id}/attempts:
     get:
+      operationId: getV1JobsIdAttempts
       summary: List execution attempts for a job
       parameters: [{$ref: '#/components/parameters/ID'}]
-      responses: {'200': {description: Execution attempts}}
+      responses: {'200': {description: Execution attempts}, '401': {description: 'Authentication required'}}
   /v1/jobs/{id}/events:
     get:
+      operationId: getV1JobsIdEvents
       summary: List durable job events in ascending order
       parameters:
         - {$ref: '#/components/parameters/ID'}
@@ -84,6 +95,7 @@ paths:
         '404': {description: Job not found}
   /v1/jobs/{id}/events/stream:
     get:
+      operationId: getV1JobsIdEventsStream
       summary: Follow job events over a server-sent events stream
       parameters:
         - {$ref: '#/components/parameters/ID'}
@@ -95,15 +107,18 @@ paths:
         '404': {description: Job not found}
   /v1/jobs/{id}/requeue:
     post:
+      operationId: postV1JobsIdRequeue
       summary: Requeue a dead-lettered job
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'204': {description: Dead job requeued}, '409': {description: Job is not dead}}
   /v1/jobs/{id}/artifacts:
     get:
+      operationId: getV1JobsIdArtifacts
       summary: List unexpired artifact metadata
       parameters: [{$ref: '#/components/parameters/ID'}]
-      responses: {'200': {description: Artifact list}}
+      responses: {'200': {description: Artifact list}, '401': {description: 'Authentication required'}}
     post:
+      operationId: postV1JobsIdArtifacts
       summary: Upload an artifact (maximum 50 MiB by default)
       parameters:
         - {$ref: '#/components/parameters/ID'}
@@ -112,13 +127,23 @@ paths:
       responses: {'201': {description: Artifact stored, content: {application/json: {schema: {$ref: '#/components/schemas/Artifact'}}}}, '413': {description: Artifact too large}}
   /v1/jobs/{id}/artifacts/{artifactID}/download:
     get:
+      operationId: getV1JobsIdArtifactsArtifactIDDownload
       summary: Create a short-lived signed download URL
       parameters:
         - {$ref: '#/components/parameters/ID'}
         - {name: artifactID, in: path, required: true, schema: {type: string, format: uuid}}
       responses: {'200': {description: Signed URL valid for 15 minutes}, '404': {description: Missing or expired}}
+  /v1/jobs/{id}/artifacts/{artifactID}:
+    delete:
+      operationId: deleteJobArtifact
+      summary: Delete an artifact and its metadata
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+        - {name: artifactID, in: path, required: true, schema: {type: string, format: uuid}}
+      responses: {'204': {description: Deleted}, '400': {description: Missing artifact or storage deletion failed}, '403': {description: Role or ownership forbids deletion}}
   /v1/workflows:
     get:
+      operationId: getV1Workflows
       summary: List workflow summaries with cursor pagination
       parameters:
         - {name: status, in: query, schema: {type: string}}
@@ -127,78 +152,94 @@ paths:
         - {name: created_before, in: query, schema: {type: string, format: date-time}}
         - {name: cursor, in: query, schema: {type: string}}
         - {name: limit, in: query, schema: {type: integer, maximum: 100}}
-      responses: {'200': {description: Workflow page}}
+      responses: {'200': {description: Workflow page}, '401': {description: 'Authentication required'}}
     post:
+      operationId: postV1Workflows
       summary: Submit a DAG workflow
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/WorkflowSubmission'}}}}
       responses: {'201': {description: Created}, '400': {description: Invalid DAG}}
   /v1/workflows/{id}:
     get:
+      operationId: getV1WorkflowsId
       summary: Get a workflow and its steps
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'200': {description: Workflow}, '404': {description: Not found}}
   /v1/workflows/{id}/cancel:
     post:
+      operationId: postV1WorkflowsIdCancel
       summary: Cancel a workflow
       parameters: [{$ref: '#/components/parameters/ID'}]
       requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Cancellation'}}}}
-      responses: {'204': {description: Cancelled}}
+      responses: {'204': {description: Cancelled}, '401': {description: 'Authentication required'}}
   /v1/schedules:
     get:
+      operationId: getV1Schedules
       summary: List recurring schedules
-      responses: {'200': {description: Schedules}}
+      responses: {'200': {description: Schedules}, '401': {description: 'Authentication required'}}
     post:
+      operationId: postV1Schedules
       summary: Create a recurring schedule
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Schedule'}}}}
-      responses: {'201': {description: Created}}
+      responses: {'201': {description: Created}, '401': {description: 'Authentication required'}}
   /v1/schedules/{id}/enable:
     post:
+      operationId: postV1SchedulesIdEnable
       summary: Enable a recurring schedule
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'204': {description: Enabled}, '404': {description: Not found}}
   /v1/schedules/{id}/disable:
     post:
+      operationId: postV1SchedulesIdDisable
       summary: Disable a recurring schedule
       parameters: [{$ref: '#/components/parameters/ID'}]
       responses: {'204': {description: Disabled}, '404': {description: Not found}}
   /v1/workers:
     get:
+      operationId: getV1Workers
       summary: List registered workers and heartbeat health
       responses: {'200': {description: Worker list}, '401': {description: API key required}}
   /v1/queues:
     get:
+      operationId: getV1Queues
       summary: List queue controls and running counts
-      responses: {'200': {description: Queue list}}
+      responses: {'200': {description: Queue list}, '401': {description: 'Authentication required'}}
   /v1/queues/{queue}:
     put:
+      operationId: putV1QueuesQueue
       summary: Pause/resume a queue and configure its concurrency cap
       parameters: [{name: queue, in: path, required: true, schema: {type: string}}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/QueueControl'}}}}
-      responses: {'204': {description: Queue control updated}}
+      responses: {'204': {description: Queue control updated}, '401': {description: 'Authentication required'}}
   /v1/admin/principals:
     post:
+      operationId: postV1AdminPrincipals
       summary: Create an RBAC principal (admin only)
       responses: {'201': {description: Principal created}, '403': {description: Admin role required}}
   /v1/admin/principals/{id}/keys:
     post:
+      operationId: postV1AdminPrincipalsIdKeys
       summary: Create a one-time API key token (admin only)
       parameters: [{$ref: '#/components/parameters/ID'}]
-      responses: {'201': {description: Key created; plaintext token is returned only once}}
+      responses: {'201': {description: Key created; plaintext token is returned only once}, '401': {description: 'Authentication required'}}
   /v1/admin/keys:
     get:
+      operationId: getV1AdminKeys
       summary: List API key metadata without secret values (admin only)
       responses: {'200': {description: API key metadata and owning principals}, '403': {description: Admin role required}}
   /v1/admin/keys/{id}:
     delete:
+      operationId: deleteV1AdminKeysId
       summary: Revoke an API key (admin only)
       parameters: [{$ref: '#/components/parameters/ID'}]
-      responses: {'204': {description: Key revoked}}
+      responses: {'204': {description: Key revoked}, '401': {description: 'Authentication required'}}
   /v1/admin/audit:
     get:
+      operationId: getV1AdminAudit
       summary: Read the latest mutation audit records (admin only)
-      responses: {'200': {description: Audit records}}
+      responses: {'200': {description: Audit records}, '401': {description: 'Authentication required'}}
   /v1/admin/quotas/{id}:
     put:
+      operationId: putV1AdminQuotasId
       summary: Set tenant quotas (admin only)
       parameters: [{$ref: '#/components/parameters/ID'}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TenantQuota'}}}}

@@ -1,0 +1,10 @@
+{
+  "name": "demo-sales-report",
+  "fail_fast": true,
+  "steps": [
+    {"key":"customers","type":"report.read-customers","queue":"jobs.reports","payload":{}},
+    {"key":"orders","type":"report.read-orders","queue":"jobs.reports","payload":{}},
+    {"key":"aggregate","type":"report.aggregate","queue":"jobs.reports","depends_on":["customers","orders"],"payload":{"customers":"${{ steps.customers.output.customers }}","orders":"${{ steps.orders.output.orders }}"}},
+    {"key":"report","type":"report.render","queue":"jobs.reports","depends_on":["aggregate"],"payload":{"summary":"${{ steps.aggregate.output.summary }}"}}
+  ]
+}

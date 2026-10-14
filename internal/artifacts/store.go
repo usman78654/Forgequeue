@@ -84,6 +84,9 @@ func (s Store) Put(ctx context.Context, jobID, name, contentType string, body []
 	expires := time.Now().Add(s.Retention)
 	var a Artifact
 	err = s.DB.QueryRow(ctx, `INSERT INTO job_artifacts(job_id,name,content_type,object_key,size_bytes,sha256,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,job_id,name,content_type,size_bytes,sha256,created_at,expires_at`, jobID, name, contentType, key, len(body), hex.EncodeToString(sum[:]), expires).Scan(&a.ID, &a.JobID, &a.Name, &a.ContentType, &a.SizeBytes, &a.SHA256, &a.CreatedAt, &a.ExpiresAt)
+	if err != nil {
+		_ = s.deleteObject(context.WithoutCancel(ctx), key)
+	}
 	return a, err
 }
 func (s Store) List(ctx context.Context, jobID string) ([]Artifact, error) {
@@ -114,24 +117,58 @@ func (s Store) DownloadURL(ctx context.Context, jobID, id string, valid time.Dur
 	return s.presign(s.PublicEndpoint, "/"+s.Bucket+"/"+key, valid), nil
 }
 func (s Store) Cleanup(ctx context.Context) error {
-	rows, err := s.DB.Query(ctx, `DELETE FROM job_artifacts WHERE expires_at<=now() RETURNING object_key`)
+	rows, err := s.DB.Query(ctx, `SELECT id,job_id FROM job_artifacts WHERE expires_at<=now() ORDER BY expires_at LIMIT 200`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
+	type expiredArtifact struct{ id, jobID string }
+	var expired []expiredArtifact
 	for rows.Next() {
-		var key string
-		if rows.Scan(&key) == nil {
-			req, e := s.request(ctx, http.MethodDelete, s.Endpoint, "/"+s.Bucket+"/"+key, nil, "")
-			if e == nil {
-				res, e := s.client().Do(req)
-				if e == nil {
-					res.Body.Close()
-				}
-			}
+		var item expiredArtifact
+		if err := rows.Scan(&item.id, &item.jobID); err != nil {
+			return err
+		}
+		expired = append(expired, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	for _, item := range expired {
+		if err := s.Delete(ctx, item.jobID, item.id); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
 		}
 	}
-	return rows.Err()
+	return nil
+}
+
+func (s Store) Delete(ctx context.Context, jobID, id string) error {
+	var key string
+	if err := s.DB.QueryRow(ctx, `SELECT object_key FROM job_artifacts WHERE id=$1 AND job_id=$2`, id, jobID).Scan(&key); err != nil {
+		return err
+	}
+	if err := s.deleteObject(ctx, key); err != nil {
+		return err
+	}
+	_, err := s.DB.Exec(ctx, `DELETE FROM job_artifacts WHERE id=$1 AND job_id=$2`, id, jobID)
+	return err
+}
+
+func (s Store) deleteObject(ctx context.Context, key string) error {
+	req, err := s.request(ctx, http.MethodDelete, s.Endpoint, "/"+s.Bucket+"/"+key, nil, "")
+	if err != nil {
+		return err
+	}
+	res, err := s.client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode/100 != 2 && res.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("artifact deletion: %s", res.Status)
+	}
+	return nil
 }
 func (s Store) RunCleanup(ctx context.Context) {
 	t := time.NewTicker(time.Hour)

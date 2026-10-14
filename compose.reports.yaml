@@ -1,0 +1,22 @@
+# Standalone development worker; start the normal API/database/broker first.
+services:
+  report-worker:
+    image: golang:1.23
+    working_dir: /src
+    command: ["go", "run", "./examples/report-worker"]
+    volumes:
+      - .:/src:ro
+      - ./demo-output/reports:/reports
+      - report-gomod:/go/pkg/mod
+      - report-gocache:/root/.cache/go-build
+    environment:
+      DATABASE_URL: postgres://queue:queue@host.docker.internal:5432/queue?sslmode=disable
+      RABBITMQ_URL: amqp://guest:guest@host.docker.internal:5672/
+      REPORT_OUTPUT_DIR: /reports
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    stop_grace_period: 60s
+volumes:
+  report-gomod:
+    name: forgequeue-development-gomod
+  report-gocache:
+    name: forgequeue-development-gocache

@@ -1,4 +1,6 @@
 import type {AppShellProps, View} from '../types';
+import {ThemeControl} from './ThemeControl';
+import {ObservabilityLinks} from './ObservabilityLinks';
 
 const views: View[] = ['Jobs', 'Workflows', 'DAG Builder', 'Schedules', 'Workers', 'Queues'];
 
@@ -57,6 +59,10 @@ export function AppShell({
             {connected ? 'API connected' : 'Not connected'}
           </span>
         </header>
+        <div className="toolbar">
+          <ThemeControl />
+          <ObservabilityLinks resource={view.toLowerCase()} />
+        </div>
         {children}
       </main>
     </div>

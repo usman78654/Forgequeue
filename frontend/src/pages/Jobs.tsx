@@ -1,9 +1,15 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useMemo, useState} from 'react';
+import {usePageQuery} from '../hooks/usePageQuery';
+import {useDebouncedValue} from '../hooks/useDebouncedValue';
+import {Pagination} from '../components/Pagination';
+import {JobActivity} from '../components/JobActivity';
+import {JobArtifacts} from '../components/JobArtifacts';
 import {Dialog} from '../components/Dialog';
 import {EmptyState, LoadingState, StatusBadge} from '../components/Feedback';
 import {
   errorMessage,
   type Job,
+  type JobAttempt,
   type JobDetail,
   type JobEvent,
   type JobStatus,
@@ -15,12 +21,20 @@ import {
 } from '../types';
 import type {ApiRequest} from '../api-client';
 
-const states: JobStatus[] = ['queued', 'running', 'succeeded', 'retrying', 'dead'];
+const states: JobStatus[] = ['queued', 'running', 'succeeded', 'retrying', 'dead', 'cancelled'];
 
 export function Jobs({api, notify, principal}: PageProps) {
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [filter, setFilter] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [queueFilter, setQueueFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const queue = useDebouncedValue(queueFilter.trim());
+  const type = useDebouncedValue(typeFilter.trim());
+  const query = usePageQuery<Job>(
+    api,
+    `/v1/jobs?limit=50${filter ? `&status=${encodeURIComponent(filter)}` : ''}${queue ? `&queue=${encodeURIComponent(queue)}` : ''}${type ? `&type=${encodeURIComponent(type)}` : ''}`,
+    notify,
+  );
+  const {items: jobs, loading, load} = query;
   const [pendingJob, setPendingJob] = useState('');
   const [showSubmit, setShowSubmit] = useState(false);
   const [detail, setDetail] = useState<JobDetail | null>(null);
@@ -29,23 +43,6 @@ export function Jobs({api, notify, principal}: PageProps) {
   const [confirmBulk, setConfirmBulk] = useState(false);
   const canMutate = principal?.role !== 'viewer';
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const page = await api<Page<Job>>(
-        `/v1/jobs?limit=50${filter ? `&status=${encodeURIComponent(filter)}` : ''}`,
-      );
-      setJobs(page.items || []);
-    } catch (error: unknown) {
-      notify('error', errorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, filter, notify]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
   const counts = useMemo(
     () =>
       (['queued', 'running', 'succeeded', 'dead'] as JobStatus[]).map(
@@ -57,11 +54,16 @@ export function Jobs({api, notify, principal}: PageProps) {
   const inspect = async (job: Job) => {
     setPendingJob(job.id);
     try {
-      const [current, events] = await Promise.all([
+      const [current, events, attempts] = await Promise.all([
         api<Job>(`/v1/jobs/${job.id}`),
         api<Page<JobEvent>>(`/v1/jobs/${job.id}/events`),
+        api<JobAttempt[]>(`/v1/jobs/${job.id}/attempts`),
       ]);
-      setDetail({...current, events: events.items});
+      setDetail({
+        ...current,
+        events: events.items || [],
+        attempts: Array.isArray(attempts) ? attempts : [],
+      });
     } catch (error: unknown) {
       notify('error', errorMessage(error));
     } finally {
@@ -120,7 +122,7 @@ export function Jobs({api, notify, principal}: PageProps) {
 
   return (
     <>
-      <div className="stats" aria-label="Job status summary">
+      <div className="stats" aria-label="Visible page job status summary">
         {counts.map(([state, count]) => (
           <div className="stat" key={state}>
             <span>{state}</span>
@@ -138,6 +140,14 @@ export function Jobs({api, notify, principal}: PageProps) {
             <option key={state}>{state}</option>
           ))}
         </select>
+        <label>
+          Queue
+          <input value={queueFilter} onChange={(event) => setQueueFilter(event.target.value)} />
+        </label>
+        <label>
+          Job type
+          <input value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} />
+        </label>
         <button onClick={load} disabled={loading}>
           Refresh
         </button>
@@ -221,7 +231,12 @@ export function Jobs({api, notify, principal}: PageProps) {
                   <td>{new Date(job.created_at).toLocaleString()}</td>
                   <td>
                     {canMutate ? (
-                      <button disabled={Boolean(pendingJob)} onClick={() => setConfirmJob(job)}>
+                      <button
+                        disabled={
+                          Boolean(pendingJob) || ['succeeded', 'cancelled'].includes(job.status)
+                        }
+                        onClick={() => setConfirmJob(job)}
+                      >
                         {pendingJob === job.id
                           ? 'Working…'
                           : job.status === 'dead'
@@ -238,6 +253,7 @@ export function Jobs({api, notify, principal}: PageProps) {
           </table>
         </div>
       )}
+      <Pagination {...query} />
       {detail && (
         <Dialog
           title={`Job ${detail.id.slice(0, 8)}`}
@@ -245,6 +261,27 @@ export function Jobs({api, notify, principal}: PageProps) {
           actions={<button onClick={() => setDetail(null)}>Close</button>}
         >
           <StatusBadge status={detail.status} />
+          <JobActivity key={detail.id} jobId={detail.id} initialEvents={detail.events} />
+          <section aria-label="Attempt history">
+            <h3>Attempts</h3>
+            {detail.attempts?.length ? (
+              <ol>
+                {detail.attempts.map((attempt) => (
+                  <li key={attempt.attempt}>
+                    Attempt {attempt.attempt} · {attempt.worker_id} ·{' '}
+                    {new Date(attempt.started_at).toLocaleString()}
+                    {attempt.finished_at
+                      ? ` → ${new Date(attempt.finished_at).toLocaleString()}`
+                      : ' · In progress'}
+                    {attempt.error && <pre>{attempt.error}</pre>}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>No attempts yet.</p>
+            )}
+          </section>
+          <JobArtifacts api={api} notify={notify} jobId={detail.id} canUpload={canMutate} />
           <pre>{JSON.stringify(detail, null, 2)}</pre>
         </Dialog>
       )}

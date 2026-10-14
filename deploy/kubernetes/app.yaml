@@ -18,7 +18,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: api, namespace: forgequeue}
+metadata: {name: api, namespace: forgequeue, labels: {forgequeue-monitor: api}}
 spec:
   selector: {app: forgequeue-api}
   ports: [{name: http, port: 80, targetPort: http}]
@@ -42,7 +42,7 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: worker-metrics, namespace: forgequeue}
+metadata: {name: worker-metrics, namespace: forgequeue, labels: {forgequeue-monitor: enabled}}
 spec:
   selector: {app: forgequeue-worker}
   ports: [{name: metrics, port: 9091, targetPort: metrics}]
@@ -74,3 +74,15 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata: {name: worker, namespace: forgequeue}
 spec: {minAvailable: 1, selector: {matchLabels: {app: forgequeue-worker}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: scheduler-metrics, namespace: forgequeue, labels: {forgequeue-monitor: enabled}}
+spec:
+  selector: {app: forgequeue-scheduler}
+  ports: [{name: metrics, port: 9092, targetPort: metrics}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: scheduler, namespace: forgequeue}
+spec: {minAvailable: 1, selector: {matchLabels: {app: forgequeue-scheduler}}}

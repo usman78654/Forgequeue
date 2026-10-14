@@ -2,6 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {Dialog} from '../components/Dialog';
 import {EmptyState, LoadingState, StatusBadge} from '../components/Feedback';
 import {errorMessage, type APIKeyRecord, type Page, type PageProps} from '../types';
+import {AdminTools} from './AdminTools';
 
 export function Administration({api, notify, principal}: PageProps) {
   const [items, setItems] = useState<APIKeyRecord[]>([]);
@@ -9,21 +10,24 @@ export function Administration({api, notify, principal}: PageProps) {
   const [pending, setPending] = useState('');
   const [selected, setSelected] = useState<APIKeyRecord | null>(null);
 
-  const load = useCallback(async () => {
-    if (principal?.role !== 'admin') {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const page = await api<Page<APIKeyRecord>>('/v1/admin/keys');
-      setItems(page.items || []);
-    } catch (error: unknown) {
-      notify('error', errorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, notify, principal?.role]);
+  const load = useCallback(
+    async (showLoading = true) => {
+      if (principal?.role !== 'admin') {
+        setLoading(false);
+        return;
+      }
+      if (showLoading) setLoading(true);
+      try {
+        const page = await api<Page<APIKeyRecord>>('/v1/admin/keys');
+        setItems(page.items || []);
+      } catch (error: unknown) {
+        notify('error', errorMessage(error));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api, notify, principal?.role],
+  );
 
   useEffect(() => {
     load();
@@ -52,16 +56,15 @@ export function Administration({api, notify, principal}: PageProps) {
       <EmptyState title="Admin access required" message="This page is only available to admins." />
     );
   if (loading) return <LoadingState label="Loading API keys" />;
-  if (!items.length)
-    return (
-      <EmptyState
-        title="No API keys found"
-        message="Create principals and keys through the administration API. Secret values are shown only once."
-      />
-    );
 
   return (
     <>
+      <AdminTools
+        api={api}
+        notify={notify}
+        principal={principal}
+        onKeyCreated={() => load(false)}
+      />
       <div className="panel table-panel">
         <table>
           <thead>
