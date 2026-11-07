@@ -3,7 +3,7 @@ module github.com/usman78654/Forgequeue
 go 1.27.2
 
 require (
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/rabbitmq/amqp091-go v1.15.0
 	go.opentelemetry.io/otel v1.47.0
